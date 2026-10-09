@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import './style.css';
 
-const SUPABASE_URL = 'PASTE_SUPABASE_PROJECT_URL_HERE';
-const SUPABASE_ANON_KEY = 'PASTE_SUPABASE_ANON_KEY_HERE';
+const SUPABASE_URL = 'https://hijycfvjyozjgcgkqmkl.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_aMD74RSdrlxF8BdxdBpjNw_VvbdyVxK';
 const configured = SUPABASE_URL.startsWith('https://') && !SUPABASE_URL.includes('PASTE_') && !SUPABASE_ANON_KEY.includes('PASTE_');
 const supabase = configured ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
@@ -176,7 +176,7 @@ async function renderUsers(root) {
   const wrap=root.querySelector('#users-table');if(error){wrap.textContent=error.message;return;}
   wrap.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Jina</th><th>Role</th><th>Hali</th><th>User ID</th></tr></thead><tbody>${data.map(u=>`<tr><td><b>${esc(u.full_name||'—')}</b></td><td><span class="status">${esc(u.role)}</span></td><td>${u.active?'Active':'Inactive'}</td><td><code>${esc(u.id)}</code></td></tr>`).join('')}</tbody></table></div>`;
 }
-function renderSettings(root) {
+async function renderSettings(root) {
   root.innerHTML=`<div class="content-grid"><section class="panel"><div class="panel-head"><div><h3>Taarifa za biashara</h3><p class="muted">Jina litaonekana kwenye risiti.</p></div></div><form id="settings-form"><label>Jina la stationary<input name="business_name" required></label><label>Namba ya simu<input name="phone"></label><label>Anwani / eneo<input name="address"></label><label>Ujumbe wa risiti<textarea name="receipt_footer"></textarea></label><button class="primary wide">Hifadhi mipangilio</button><p id="settings-error" class="form-error"></p></form></section><section class="panel"><h3>Backup na usalama</h3><p class="muted">Data iko Supabase. Export ya CSV ni nakala ya taarifa zilizopakuliwa, si backup kamili ya database.</p><a class="text-link" href="https://supabase.com/dashboard" target="_blank" rel="noreferrer">Fungua Supabase Dashboard ↗</a><div class="callout">Weka backup ya database na ujaribu restore mara kwa mara. Usishiriki anon key yenyewe kama siri, na usiweke service_role key kwenye browser.</div></section></div>`;
   const {data}=await supabase.from('business_settings').select('business_name,phone,address,receipt_footer').limit(1).maybeSingle();
   const form=root.querySelector('#settings-form');if(data)Object.entries(data).forEach(([k,v])=>{if(form.elements[k])form.elements[k].value=v||'';});
