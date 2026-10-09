@@ -1,0 +1,1 @@
+Vite serves root files; put the icon in public/icons/icon.svg.
