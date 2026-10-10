@@ -1,17 +1,144 @@
+
 <!doctype html>
 <html lang="sw">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#123b2a">
-  <meta name="description" content="StationeryPro — Powered by Mozz Elly">
+  <meta name="description" content="StationeryPro — Mfumo wa kusimamia stationery, bidhaa, stock na mauzo. Powered by Mozz Elly.">
+
   <link rel="manifest" href="/manifest.webmanifest">
+
   <title>StationeryPro — Powered by Mozz Elly</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f4f7f5;
+      color: #183629;
+    }
+
+    #app {
+      min-height: 100vh;
+    }
+
+    .startup-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .startup-card {
+      width: 100%;
+      max-width: 400px;
+      padding: 36px 28px;
+      background: #ffffff;
+      border: 1px solid #e1eae4;
+      border-radius: 18px;
+      text-align: center;
+      box-shadow: 0 12px 40px rgba(18, 59, 42, 0.08);
+    }
+
+    .startup-logo {
+      width: 62px;
+      height: 62px;
+      margin: 0 auto 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 16px;
+      background: #123b2a;
+      color: #ffffff;
+      font-size: 23px;
+      font-weight: 800;
+      letter-spacing: 1px;
+    }
+
+    .startup-card h1 {
+      margin: 0 0 10px;
+      font-size: 25px;
+    }
+
+    .startup-card p {
+      color: #68786e;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .startup-spinner {
+      width: 30px;
+      height: 30px;
+      margin: 24px auto 0;
+      border: 3px solid #dce8df;
+      border-top-color: #123b2a;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .startup-error {
+      color: #b42318;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .startup-spinner {
+        animation: none;
+      }
+    }
+  </style>
 </head>
+
 <body>
   <div id="app">
-    <p>StationeryPro inafunguka...</p>
+    <main class="startup-screen">
+      <section class="startup-card">
+        <div class="startup-logo">SP</div>
+        <h1>StationeryPro</h1>
+        <p id="startup-message">
+          Tunaandaa mfumo wako. Tafadhali subiri...
+        </p>
+        <div class="startup-spinner" aria-hidden="true"></div>
+      </section>
+    </main>
   </div>
+
+  <script>
+    window.__stationeryProStarted = false;
+
+    window.setTimeout(() => {
+      if (window.__stationeryProStarted) return;
+
+      const message = document.getElementById("startup-message");
+
+      if (message) {
+        message.textContent =
+          "Mfumo haujaanza vizuri. Tafadhali kagua JavaScript Console kwa taarifa za hitilafu.";
+        message.className = "startup-error";
+      }
+
+      const spinner = document.querySelector(".startup-spinner");
+
+      if (spinner) {
+        spinner.style.display = "none";
+      }
+    }, 10000);
+  </script>
+
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
