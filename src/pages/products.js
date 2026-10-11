@@ -1,152 +1,354 @@
-import { requireSupabase } from '../lib/supabase.js';
+import { supabase } from '../lib/supabase.js';
 
-const money = (value) =>
-  new Intl.NumberFormat('en-TZ', {
-    style: 'currency',
-    currency: 'TZS',
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0));
-
-const escapeHtml = (value) =>
-  String(value ?? '').replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  })[c]);
-
-export async function renderProducts(root) {
+export async function renderProducts(root, user, profile) {
   root.innerHTML = `
-    <section class="page-heading">
-      <div><p class="eyebrow">USIMAMIZI WA STOCK</p><h1>Bidhaa</h1></div>
-      <button id="add-product" class="btn btn-primary">Ongeza bidhaa</button>
-    </section>
-    <p id="products-message" class="error-message"></p>
-    <section class="panel">
-      <input id="product-search" placeholder="Tafuta bidhaa..." aria-label="Tafuta bidhaa">
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Jina</th><th>SKU</th><th>Bei ya kununua</th><th>Bei ya kuuza</th><th>Stock</th></tr></thead>
-          <tbody id="products-body"></tbody>
-        </table>
-      </div>
-    </section>
-    <dialog id="product-dialog">
-      <form id="product-form" class="dialog-form">
-        <h2>Ongeza bidhaa</h2>
-        <label>Jina la bidhaa<input name="name" required maxlength="150"></label>
-        <label>SKU / Barcode<input name="sku" maxlength="100"></label>
-        <label>Bei ya kununua (TSh)<input name="cost_price" type="number" min="0" step="1" required></label>
-        <label>Bei ya kuuza (TSh)<input name="selling_price" type="number" min="0" step="1" required></label>
-        <label>Stock ya mwanzo<input name="stock_quantity" type="number" min="0" step="1" value="0" required></label>
-        <label>Stock ya kuagiza tena inapofikia<input name="reorder_level" type="number" min="0" step="1" value="5" required></label>
-        <p id="product-form-error" class="error-message"></p>
-        <div class="dialog-actions">
-          <button type="button" id="cancel-product" class="btn btn-light">Ghairi</button>
-          <button type="submit" class="btn btn-primary">Hifadhi</button>
+    <div class="page-header">
+      <h1>Bidhaa na Stock</h1>
+      <button id="add-product-btn" class="btn btn-primary">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
+        Ongeza Bidhaa
+      </button>
+    </div>
+
+    <div class="filters">
+      <input type="text" id="search-product" placeholder="Tafuta bidhaa kwa jina au SKU..." />
+      <select id="filter-category">
+        <option value="">Kategoria zote</option>
+      </select>
+    </div>
+
+    <div class="table-wrap">
+      <table id="products-table">
+        <thead>
+          <tr>
+            <th>Jina la Bidhaa</th>
+            <th>SKU</th>
+            <th>Kategoria</th>
+            <th>Bei ya Kununua</th>
+            <th>Bei ya Kuuza</th>
+            <th>Stock (Mwanzo / Sasa)</th>
+            <th>Hali</th>
+            <th>Vitendo</th>
+          </tr>
+        </thead>
+        <tbody id="products-body">
+          <tr><td colspan="8" class="empty-state">Inapakia...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Modal ya Kuongeza/Hariri Bidhaa -->
+    <div id="product-modal" class="modal-overlay" style="display: none;">
+      <div class="modal" style="max-width: 700px;">
+        <div class="modal-header">
+          <h3 id="modal-title">Ongeza Bidhaa</h3>
+          <button class="modal-close" id="close-modal">×</button>
         </div>
-      </form>
-    </dialog>
+        <div class="modal-body">
+          <form id="product-form">
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Jina la bidhaa *</label>
+                <input type="text" name="name" required />
+              </div>
+              <div class="form-group">
+                <label>SKU / Barcode Namba</label>
+                <input type="text" name="sku" />
+              </div>
+              <div class="form-group">
+                <label>Kategoria</label>
+                <select name="category_id">
+                  <option value="">Chagua kategoria</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Unit (kipimo)</label>
+                <input type="text" name="unit" value="piece" />
+              </div>
+              <div class="form-group">
+                <label>Bei ya kununua (TSh) *</label>
+                <input type="number" name="cost_price" step="0.01" min="0" required />
+              </div>
+              <div class="form-group">
+                <label>Bei ya kuuza (TSh) *</label>
+                <input type="number" name="selling_price" step="0.01" min="0" required />
+              </div>
+              <div class="form-group">
+                <label>Stock ya Mwanzo *</label>
+                <input type="number" name="initial_stock" step="0.001" min="0" required />
+              </div>
+              <div class="form-group">
+                <label>Stock ya Sasa</label>
+                <input type="number" name="stock_quantity" step="0.001" min="0" value="0" />
+              </div>
+              <div class="form-group">
+                <label>Stock ya Kuagiza Tena (Alert)</label>
+                <input type="number" name="reorder_level" step="0.001" min="0" value="5" />
+              </div>
+              <div class="form-group span-all">
+                <label>Picha ya Barcode (Hiari)</label>
+                <input type="file" id="barcode-input" name="barcode_image" accept="image/*" />
+                <small class="text-muted">Pakia picha ya barcode ikiwa nayo.</small>
+                <div id="barcode-preview" style="margin-top: 10px; max-width: 200px;"></div>
+              </div>
+            </div>
+            <div id="form-message" class="form-message" style="display: none;"></div>
+            <div class="form-buttons">
+              <button type="button" class="btn btn-secondary" id="cancel-btn">Ghairi</button>
+              <button type="submit" class="btn btn-primary">Hifadhi Bidhaa</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   `;
 
-  const db = requireSupabase();
-  const dialog = root.querySelector('#product-dialog');
-  const form = root.querySelector('#product-form');
-  const errorBox = root.querySelector('#product-form-error');
-  let products = [];
+  await loadProducts();
+  await loadCategories();
 
-  async function loadProducts() {
-    const { data, error } = await db.from('products')
-      .select('id, name, sku, cost_price, selling_price, stock_quantity, reorder_level')
-      .eq('is_active', true)
-      .order('name');
-
-    if (error) throw error;
-    products = data || [];
-    drawProducts(products);
-  }
-
-  function drawProducts(list) {
-    root.querySelector('#products-body').innerHTML = list.length
-      ? list.map((p) => `
-        <tr>
-          <td>${escapeHtml(p.name)}</td>
-          <td>${escapeHtml(p.sku || '—')}</td>
-          <td>${money(p.cost_price)}</td>
-          <td>${money(p.selling_price)}</td>
-          <td>${Number(p.stock_quantity)}</td>
-        </tr>
-      `).join('')
-      : '<tr><td colspan="5">Hakuna bidhaa zilizopatikana.</td></tr>';
-  }
-
-  root.querySelector('#product-search').addEventListener('input', (event) => {
-    const q = event.target.value.trim().toLowerCase();
-    drawProducts(products.filter((p) =>
-      p.name.toLowerCase().includes(q) || String(p.sku || '').toLowerCase().includes(q)
-    ));
+  document.getElementById('add-product-btn').addEventListener('click', () => openModal());
+  document.getElementById('close-modal').addEventListener('click', () => closeModal());
+  document.getElementById('cancel-btn').addEventListener('click', () => closeModal());
+  
+  document.getElementById('product-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await saveProduct();
   });
 
-  root.querySelector('#add-product').addEventListener('click', () => {
+  document.getElementById('search-product').addEventListener('input', () => loadProducts());
+  document.getElementById('filter-category').addEventListener('change', () => loadProducts());
+
+  // Barcode image preview logic
+  document.getElementById('barcode-input').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const preview = document.getElementById('barcode-preview');
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        preview.innerHTML = `<img src="${e.target.result}" style="max-width: 100%; border: 1px solid var(--border); border-radius: 4px;" />`;
+      }
+      reader.readAsDataURL(file);
+    } else {
+      preview.innerHTML = '';
+    }
+  });
+}
+
+async function loadProducts() {
+  const search = document.getElementById('search-product')?.value || '';
+  const categoryId = document.getElementById('filter-category')?.value || '';
+  const tbody = document.getElementById('products-body');
+
+  let query = supabase
+    .from('products')
+    .select('*, categories(name)')
+    .order('created_at', { ascending: false });
+
+  if (search) {
+    query = query.or(`name.ilike.%${search}%,sku.ilike.%${search}%`);
+  }
+
+  if (categoryId) {
+    query = query.eq('category_id', categoryId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Hitilafu: ${error.message}</td></tr>`;
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Hakuna bidhaa zilizopatikana</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = data.map(p => {
+    const stockStatus = p.stock_quantity <= p.reorder_level 
+      ? '<span class="badge badge-warning">Stock Chini</span>'
+      : '<span class="badge badge-success">OK</span>';
+
+    return `
+      <tr>
+        <td><strong>${p.name}</strong></td>
+        <td>${p.sku || '-'}</td>
+        <td>${p.categories?.name || '-'}</td>
+        <td>${window.money(p.cost_price)}</td>
+        <td>${window.money(p.selling_price)}</td>
+        <td>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <span style="font-weight: 700; color: var(--blue-dark);">${p.stock_quantity}</span>
+            <small class="text-muted">Mwanzo: ${p.initial_stock || 0}</small>
+          </div>
+        </td>
+        <td>${stockStatus}</td>
+        <td>
+          <button class="btn btn-sm btn-secondary" onclick="editProduct('${p.id}')">Hariri</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteProduct('${p.id}')">Futa</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function loadCategories() {
+  const { data, error } = await supabase
+    .from('categories')
+    .select('*')
+    .order('name');
+
+  if (error) {
+    console.error('Error loading categories:', error);
+    return;
+  }
+
+  const categorySelect = document.querySelector('select[name="category_id"]');
+  const filterSelect = document.getElementById('filter-category');
+  
+  if (categorySelect) {
+    const currentValue = categorySelect.value;
+    categorySelect.innerHTML = '<option value="">Chagua kategoria</option>' +
+      (data || []).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    categorySelect.value = currentValue;
+  }
+  
+  if (filterSelect) {
+    const currentValue = filterSelect.value;
+    filterSelect.innerHTML = '<option value="">Kategoria zote</option>' +
+      (data || []).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    filterSelect.value = currentValue;
+  }
+}
+
+function openModal(product = null) {
+  const modal = document.getElementById('product-modal');
+  const title = document.getElementById('modal-title');
+  const form = document.getElementById('product-form');
+  const preview = document.getElementById('barcode-preview');
+
+  if (product) {
+    title.textContent = 'Hariri Bidhaa';
+    form.name.value = product.name;
+    form.sku.value = product.sku || '';
+    form.category_id.value = product.category_id || '';
+    form.unit.value = product.unit || 'piece';
+    form.cost_price.value = product.cost_price;
+    form.selling_price.value = product.selling_price;
+    form.initial_stock.value = product.initial_stock || 0;
+    form.stock_quantity.value = product.stock_quantity;
+    form.reorder_level.value = product.reorder_level;
+    form.dataset.productId = product.id;
+
+    // Show existing barcode image if any
+    if (product.barcode_image) {
+      preview.innerHTML = `<img src="${product.barcode_image}" style="max-width: 100%; border: 1px solid var(--border); border-radius: 4px;" />`;
+    } else {
+      preview.innerHTML = '';
+    }
+  } else {
+    title.textContent = 'Ongeza Bidhaa';
     form.reset();
-    errorBox.textContent = '';
-    dialog.showModal();
-  });
+    delete form.dataset.productId;
+    preview.innerHTML = '';
+  }
 
-  root.querySelector('#cancel-product').addEventListener('click', () => dialog.close());
+  modal.style.display = 'flex';
+}
 
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    errorBox.textContent = '';
+function closeModal() {
+  const modal = document.getElementById('product-modal');
+  modal.style.display = 'none';
+  document.getElementById('form-message').style.display = 'none';
+}
 
-    const values = new FormData(form);
-    const name = String(values.get('name')).trim();
-    const sku = String(values.get('sku') || '').trim() || null;
-    const cost = Number(values.get('cost_price'));
-    const selling = Number(values.get('selling_price'));
-    const stock = Number(values.get('stock_quantity'));
-    const reorder = Number(values.get('reorder_level'));
+async function saveProduct() {
+  const form = document.getElementById('product-form');
+  const message = document.getElementById('form-message');
+  const productId = form.dataset.productId;
+  const barcodeFile = form.barcode_image.files[0];
 
-    if (!name || [cost, selling, stock, reorder].some((n) => !Number.isFinite(n) || n < 0)) {
-      errorBox.textContent = 'Kagua taarifa ulizoingiza.';
+  const baseData = {
+    name: form.name.value,
+    sku: form.sku.value || null,
+    category_id: form.category_id.value || null,
+    unit: form.unit.value || 'piece',
+    cost_price: parseFloat(form.cost_price.value),
+    selling_price: parseFloat(form.selling_price.value),
+    initial_stock: parseFloat(form.initial_stock.value) || 0,
+    stock_quantity: parseFloat(form.stock_quantity.value) || 0,
+    reorder_level: parseFloat(form.reorder_level.value) || 5
+  };
+
+  const executeSave = async (barcodeDataUrl) => {
+    const finalData = { ...baseData, barcode_image: barcodeDataUrl };
+
+    let result;
+    if (productId) {
+      result = await supabase.from('products').update(finalData).eq('id', productId);
+    } else {
+      result = await supabase.from('products').insert([finalData]);
+    }
+
+    if (result.error) {
+      message.textContent = result.error.message;
+      message.className = 'form-message error';
+      message.style.display = 'block';
       return;
     }
 
-    try {
-      const { data: userResult, error: userError } = await db.auth.getUser();
-      if (userError) throw userError;
+    message.textContent = productId ? 'Bidhaa imesasishwa!' : 'Bidhaa imeongezwa!';
+    message.className = 'form-message success';
+    message.style.display = 'block';
 
-      const { data: product, error } = await db.from('products').insert({
-        name,
-        sku,
-        cost_price: cost,
-        selling_price: selling,
-        stock_quantity: stock,
-        reorder_level: reorder,
-        created_by: userResult.user.id,
-      }).select('id').single();
+    setTimeout(() => {
+      closeModal();
+      loadProducts();
+    }, 1500);
+  };
 
-      if (error) throw error;
-
-      if (stock > 0) {
-        const { error: movementError } = await db.from('stock_movements').insert({
-          product_id: product.id,
-          movement_type: 'opening',
-          quantity: stock,
-          note: 'Stock ya mwanzo',
-          user_id: userResult.user.id,
-        });
-
-        if (movementError) throw movementError;
-      }
-
-      dialog.close();
-      await loadProducts();
-    } catch (error) {
-      errorBox.textContent = error.message || 'Imeshindikana kuhifadhi bidhaa.';
+  if (barcodeFile) {
+    const reader = new FileReader();
+    reader.onload = (e) => executeSave(e.target.result);
+    reader.readAsDataURL(barcodeFile);
+  } else {
+    if (productId) {
+      // Keep old image if editing and no new image is uploaded
+      const { data } = await supabase.from('products').select('barcode_image').eq('id', productId).single();
+      executeSave(data?.barcode_image || null);
+    } else {
+      executeSave(null);
     }
-  });
-
-  try {
-    await loadProducts();
-  } catch (error) {
-    root.querySelector('#products-message').textContent = error.message;
   }
 }
+
+window.editProduct = async (id) => {
+  const { data, error } = await supabase
+    .from('products')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    alert('Hitilafu: ' + error.message);
+    return;
+  }
+
+  openModal(data);
+};
+
+window.deleteProduct = async (id) => {
+  if (!confirm('Je, una uhakika unataka kufuta bidhaa hii?')) return;
+
+  const { error } = await supabase
+    .from('products')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    alert('Hitilafu: ' + error.message);
+    return;
+  }
+
+  loadProducts();
+};

@@ -1,5 +1,4 @@
 import { supabase } from '../lib/supabase.js';
-import { signIn, getProfile } from '../auth/auth.js';
 
 export function renderLogin(root) {
   root.innerHTML = `
@@ -14,38 +13,22 @@ export function renderLogin(root) {
         <form id="login-form" class="login-form">
           <div class="form-group">
             <label for="login-email">Barua pepe</label>
-            <input 
-              type="email" 
-              id="login-email" 
-              name="email"
-              autocomplete="username"
-              placeholder="jina@biashara.com" 
-              required
-            >
+            <input type="email" id="login-email" name="email" autocomplete="username" placeholder="jina@biashara.com" required>
           </div>
 
           <div class="form-group">
             <label for="login-password">Nenosiri</label>
-            <input 
-              type="password" 
-              id="login-password" 
-              name="password"
-              autocomplete="current-password"
-              placeholder="••••••••" 
-              required
-            >
+            <input type="password" id="login-password" name="password" autocomplete="current-password" placeholder="••••••••" required>
           </div>
 
           <div id="login-error" class="error-message" style="display: none;"></div>
 
-          <button class="btn btn-primary btn-block" type="submit" id="login-button">
-            Ingia
-          </button>
+          <button class="btn btn-primary btn-block" type="submit" id="login-button">Ingia</button>
         </form>
 
         <div class="signup-link">
           <p><a href="#" id="show-forgot">Umesahau nenosiri?</a></p>
-          <p>Huna akaunti? <a href="#" id="show-signup">Jiunde akaunti</a></p>
+          <p>Huna akaunti? <a href="#" id="show-signup">Jisajili kama Mmiliki</a></p>
         </div>
       </div>
     </main>
@@ -66,19 +49,39 @@ export function renderLogin(root) {
       const email = document.getElementById('login-email').value;
       const password = document.getElementById('login-password').value;
       
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
 
-      // Reload page after successful login
+      // Check if user is approved
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_approved, active, role')
+        .eq('id', data.user.id)
+        .single();
+
+      if (!profile.is_approved) {
+        await supabase.auth.signOut();
+        errorBox.textContent = 'Akaunti yako bado haijakubaliwa na Developer. Subiri uthibitisho.';
+        errorBox.style.display = 'block';
+        button.disabled = false;
+        button.textContent = 'Ingia';
+        return;
+      }
+
+      if (!profile.active) {
+        await supabase.auth.signOut();
+        errorBox.textContent = 'Akaunti yako imefungwa. Wasiliana na mmiliki.';
+        errorBox.style.display = 'block';
+        button.disabled = false;
+        button.textContent = 'Ingia';
+        return;
+      }
+
       window.location.reload();
       
     } catch (error) {
       console.error('Login error:', error);
-      errorBox.textContent = error.message || 'Imeshindikana kuingia. Angalia barua pepe na nenosiri.';
+      errorBox.textContent = error.message || 'Imeshindikana kuingia.';
       errorBox.style.display = 'block';
     } finally {
       button.disabled = false;
@@ -86,86 +89,71 @@ export function renderLogin(root) {
     }
   });
 
-  // Show signup form
-  const showSignupBtn = root.querySelector('#show-signup');
-  if (showSignupBtn) {
-    showSignupBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      renderSignup(root);
-    });
-  }
+  root.querySelector('#show-signup')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    renderSignup(root);
+  });
 
-  // Show forgot password form
-  const showForgotBtn = root.querySelector('#show-forgot');
-  if (showForgotBtn) {
-    showForgotBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      renderForgotPassword(root);
-    });
-  }
+  root.querySelector('#show-forgot')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    renderForgotPassword(root);
+  });
 }
 
 function renderSignup(root) {
   root.innerHTML = `
     <main class="login-screen">
-      <div class="login-card">
+      <div class="login-card" style="max-width: 520px;">
         <div class="login-header">
           <div class="logo">SP</div>
-          <h1>Unda Akaunti</h1>
-          <p>Jaza taarifa zako za kujisajili</p>
+          <h1>Jisajili - StationeryPro</h1>
+          <p>Jaza taarifa za biashara yako</p>
         </div>
 
         <form id="signup-form" class="login-form">
+          <div class="form-section-title">Taarifa za Mmiliki</div>
+          
           <div class="form-group">
-            <label for="signup-name">Jina kamili</label>
-            <input 
-              type="text" 
-              id="signup-name" 
-              name="fullName"
-              placeholder="Jina lako kamili" 
-              required
-            >
+            <label>Jina kamili *</label>
+            <input type="text" name="fullName" placeholder="Mfano: Ahmed Ali" required>
           </div>
 
           <div class="form-group">
-            <label for="signup-email">Barua pepe</label>
-            <input 
-              type="email" 
-              id="signup-email" 
-              name="email"
-              autocomplete="username"
-              placeholder="jina@biashara.com" 
-              required
-            >
+            <label>Barua pepe *</label>
+            <input type="email" name="email" autocomplete="username" placeholder="jina@biashara.com" required>
           </div>
 
           <div class="form-group">
-            <label for="signup-password">Nenosiri (angalau herufi 6)</label>
-            <input 
-              type="password" 
-              id="signup-password" 
-              name="password"
-              autocomplete="new-password"
-              placeholder="••••••••" 
-              minlength="6"
-              required
-            >
+            <label>Namba ya simu *</label>
+            <input type="tel" name="phone" placeholder="0712345678" required pattern="[0-9]{10}">
           </div>
 
           <div class="form-group">
-            <label for="signup-role">Aina ya akaunti</label>
-            <select id="signup-role" name="role">
-              <option value="employee">Mfanyakazi</option>
-              <option value="owner">Mmiliki (Owner)</option>
-            </select>
+            <label>Nenosiri (angalau herufi 6) *</label>
+            <input type="password" name="password" autocomplete="new-password" placeholder="••••••••" minlength="6" required>
+          </div>
+
+          <div class="form-section-title">Taarifa za Biashara</div>
+
+          <div class="form-group">
+            <label>Jina la duka/biashara *</label>
+            <input type="text" name="businessName" placeholder="Mfano: Stationery Center" required>
+          </div>
+
+          <div class="form-group">
+            <label>Eneo/Mahali ilipo *</label>
+            <input type="text" name="businessLocation" placeholder="Mfano: Mwanza, Kenya Street" required>
+          </div>
+
+          <div class="form-group">
+            <label>Namba ya simu ya biashara</label>
+            <input type="tel" name="businessPhone" placeholder="0282501234">
           </div>
 
           <div id="signup-error" class="error-message" style="display: none;"></div>
           <div id="signup-success" class="success-message" style="display: none;"></div>
 
-          <button class="btn btn-primary btn-block" type="submit" id="signup-button">
-            Unda Akaunti
-          </button>
+          <button class="btn btn-primary btn-block" type="submit" id="signup-button">Tuma Ombi la Usajili</button>
         </form>
 
         <div class="signup-link">
@@ -183,63 +171,69 @@ function renderSignup(root) {
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     errorBox.style.display = 'none';
-    errorBox.textContent = '';
     successBox.style.display = 'none';
     button.disabled = true;
-    button.textContent = 'Inaunda...';
+    button.textContent = 'Inatuma ombi...';
 
     try {
-      const fullName = document.getElementById('signup-name').value;
-      const email = document.getElementById('signup-email').value;
-      const password = document.getElementById('signup-password').value;
-      const role = document.getElementById('signup-role').value;
+      const fullName = form.fullName.value;
+      const email = form.email.value;
+      const password = form.password.value;
+      const phone = form.phone.value;
+      const businessName = form.businessName.value;
+      const businessLocation = form.businessLocation.value;
+      const businessPhone = form.businessPhone.value;
 
-      // Sign up with Supabase
+      // Sign up - trigger itaweka is_approved=false
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             full_name: fullName,
-            role: role
+            phone: phone,
+            role: 'owner'
           }
         }
       });
 
       if (authError) throw authError;
 
-      // Profile itaundwa automatically na trigger
-      // Hakuna haja ya kuinsert manually
+      // Create business settings for this owner
+      if (authData.user) {
+        const { error: businessError } = await supabase
+          .from('business_settings')
+          .insert({
+            owner_id: authData.user.id,
+            business_name: businessName,
+            business_address: businessLocation,
+            business_phone: businessPhone || phone,
+            business_email: email
+          });
 
-      successBox.textContent = 'Akaunti imeundwa kwa mafanikio! Sasa unaweza kuingia.';
+        if (businessError) console.error('Business settings error:', businessError);
+      }
+
+      successBox.textContent = 'Ombi lako limetumwa! Subiri Developer akubali akaunti yako.';
       successBox.style.display = 'block';
-      
-      // Clear form
       form.reset();
       
-      // Redirect to login after 2 seconds
-      setTimeout(() => {
-        renderLogin(root);
-      }, 2000);
+      setTimeout(() => renderLogin(root), 4000);
       
     } catch (error) {
       console.error('Signup error:', error);
-      errorBox.textContent = error.message || 'Imeshindikana kuunda akaunti.';
+      errorBox.textContent = error.message || 'Imeshindikana kujisajili.';
       errorBox.style.display = 'block';
     } finally {
       button.disabled = false;
-      button.textContent = 'Unda Akaunti';
+      button.textContent = 'Tuma Ombi la Usajili';
     }
   });
 
-  // Back to login
-  const showLoginBtn = root.querySelector('#show-login');
-  if (showLoginBtn) {
-    showLoginBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      renderLogin(root);
-    });
-  }
+  root.querySelector('#show-login')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    renderLogin(root);
+  });
 }
 
 function renderForgotPassword(root) {
@@ -249,28 +243,19 @@ function renderForgotPassword(root) {
         <div class="login-header">
           <div class="logo">SP</div>
           <h1>Rejesha Nenosiri</h1>
-          <p>Tutakutumia link ya kubadilisha nenosiri lako</p>
+          <p>Tutakutumia link ya kubadilisha nenosiri</p>
         </div>
 
         <form id="forgot-form" class="login-form">
           <div class="form-group">
-            <label for="forgot-email">Barua pepe</label>
-            <input 
-              type="email" 
-              id="forgot-email" 
-              name="email"
-              autocomplete="email"
-              placeholder="jina@biashara.com" 
-              required
-            >
+            <label>Barua pepe</label>
+            <input type="email" name="email" autocomplete="email" placeholder="jina@biashara.com" required>
           </div>
 
           <div id="forgot-error" class="error-message" style="display: none;"></div>
           <div id="forgot-success" class="success-message" style="display: none;"></div>
 
-          <button class="btn btn-primary btn-block" type="submit" id="forgot-button">
-            Tuma Link
-          </button>
+          <button class="btn btn-primary btn-block" type="submit" id="forgot-button">Tuma Link</button>
         </form>
 
         <div class="signup-link">
@@ -288,28 +273,21 @@ function renderForgotPassword(root) {
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     errorBox.style.display = 'none';
-    errorBox.textContent = '';
     successBox.style.display = 'none';
     button.disabled = true;
     button.textContent = 'Inatuma...';
 
     try {
-      const email = document.getElementById('forgot-email').value;
-
+      const email = form.email.value;
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: window.location.origin
       });
-
       if (error) throw error;
 
-      successBox.textContent = 'Link imekutumwa! Angalia email yako (pia angalia spam folder).';
+      successBox.textContent = 'Link imekutumwa! Angalia email yako.';
       successBox.style.display = 'block';
-      
-      // Clear form
       form.reset();
-      
     } catch (error) {
-      console.error('Forgot password error:', error);
       errorBox.textContent = error.message || 'Imeshindikana kutuma link.';
       errorBox.style.display = 'block';
     } finally {
@@ -318,12 +296,8 @@ function renderForgotPassword(root) {
     }
   });
 
-  // Back to login
-  const backToLoginBtn = root.querySelector('#back-to-login');
-  if (backToLoginBtn) {
-    backToLoginBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      renderLogin(root);
-    });
-  }
+  root.querySelector('#back-to-login')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    renderLogin(root);
+  });
 }

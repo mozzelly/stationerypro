@@ -1,290 +1,313 @@
-import { supabase } from "../lib/supabase.js";
+import { supabase } from '../lib/supabase.js';
+
+let cart = [];
+let products = [];
 
 export async function renderPOS(root, user, profile) {
-  const cart = new Map();
-
+  cart = [];
+  
   root.innerHTML = `
     <div class="pos-layout">
-      <section class="panel">
-        <div class="panel-heading"><h3>Chagua bidhaa</h3></div>
-        <input id="pos-search" placeholder="Tafuta bidhaa au scan barcode...">
-        <div id="pos-products" class="pos-products"></div>
-      </section>
-
-      <section class="panel cart-panel">
-        <div class="panel-heading"><h3>Bidhaa za mteja</h3>
-          <button id="clear-cart" class="btn btn-ghost">Futa zote</button></div>
-        <div id="pos-cart"></div>
-
-        <div class="cart-summary">
-          <label>Discount (TSh)
-            <input id="pos-discount" type="number" min="0" step="0.01" value="0">
-          </label>
-          <label>Njia ya malipo
-            <select id="payment-method">
-              <option value="cash">Cash</option>
-              <option value="mobile_money">Mobile money</option>
-              <option value="bank">Bank</option>
-              <option value="card">Card</option>
-              <option value="other">Other</option>
-            </select>
-          </label>
-          <label>Kiasi kilichopokelewa (TSh)
-            <input id="amount-tendered" type="number" min="0" step="0.01" value="0">
-          </label>
-          <div class="total-line"><span>Jumla</span><strong id="pos-total">TSh 0</strong></div>
-          <button id="complete-sale" class="btn btn-primary full-width">Kamilisha mauzo</button>
-          <p id="pos-message" class="form-message"></p>
+      <div class="pos-products-section">
+        <div class="pos-header">
+          <h3>Chagua bidhaa</h3>
+          <div class="pos-search">
+            <input type="text" id="pos-search" placeholder="Tafuta bidhaa au scan barcode..." />
+          </div>
         </div>
-      </section>
+        <div id="pos-products-grid" class="pos-products">
+          <div class="empty-state">Inapakia bidhaa...</div>
+        </div>
+      </div>
+
+      <div class="cart-section">
+        <div class="cart-panel">
+          <div class="cart-header">
+            <h3>Bidhaa za mteja</h3>
+            <button id="clear-cart" class="btn btn-sm btn-danger">Futa zote</button>
+          </div>
+          
+          <div id="cart-items" class="cart-items">
+            <div class="empty-state">Bado hujachagua bidhaa.</div>
+          </div>
+
+          <div class="cart-summary">
+            <div class="cart-summary-row">
+              <span>Jumla Ndogo:</span>
+              <span id="subtotal">TSh 0.00</span>
+            </div>
+            <div class="cart-summary-row">
+              <span>Discount:</span>
+              <div class="discount-input">
+                <input type="number" id="discount" value="0" min="0" step="100" />
+              </div>
+            </div>
+            <div class="cart-summary-row total">
+              <span><strong>Jumla:</strong></span>
+              <span id="total"><strong>TSh 0.00</strong></span>
+            </div>
+          </div>
+
+          <div class="cart-payment">
+            <div class="form-group">
+              <label>Njia ya malipo</label>
+              <select id="payment-method">
+                <option value="cash">Cash</option>
+                <option value="mobile_money">Mobile Money</option>
+                <option value="bank">Bank</option>
+                <option value="card">Card</option>
+                <option value="credit">Mkopo</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Kiasi kilichopokelewa (TSh)</label>
+              <input type="number" id="amount-paid" value="0" min="0" step="100" />
+            </div>
+            <div class="cart-summary-row">
+              <span>Baki:</span>
+              <span id="balance" style="color: var(--danger); font-weight: 700;">TSh 0.00</span>
+            </div>
+          </div>
+
+          <div class="cart-actions">
+            <button id="complete-sale" class="btn btn-primary btn-block btn-lg">
+              Kamilisha mauzo
+            </button>
+          </div>
+
+          <div id="sale-message" class="form-message" style="display: none;"></div>
+        </div>
+      </div>
     </div>
-    <div id="receipt-area"></div>
   `;
 
-  const search = root.querySelector("#pos-search");
-  const productsContainer = root.querySelector("#pos-products");
-  const cartContainer = root.querySelector("#pos-cart");
-  const discountInput = root.querySelector("#pos-discount");
-  const methodInput = root.querySelector("#payment-method");
-  const tenderedInput = root.querySelector("#amount-tendered");
-  const message = root.querySelector("#pos-message");
+  await loadProducts();
+  setupEventListeners();
+}
 
-  let products = [];
-
+async function loadProducts() {
   const { data, error } = await supabase
-    .from("products")
-    .select("id,name,sku,barcode,selling_price,stock_quantity")
-    .eq("active", true)
-    .gt("stock_quantity", 0)
-    .order("name");
+    .from('products')
+    .select('*')
+    .eq('is_active', true)
+    .gt('stock_quantity', 0)
+    .order('name');
 
-  if (error) throw error;
+  if (error) {
+    console.error('Error loading products:', error);
+    return;
+  }
+
   products = data || [];
+  renderProductsGrid(products);
+}
 
-  function drawProducts() {
-    const q = search.value.toLowerCase();
-    const filtered = products.filter(p =>
-      [p.name, p.sku, p.barcode]
-        .some(v => String(v || "").toLowerCase().includes(q))
+function renderProductsGrid(productsToRender) {
+  const grid = document.getElementById('pos-products-grid');
+  
+  if (productsToRender.length === 0) {
+    grid.innerHTML = '<div class="empty-state">Hakuna bidhaa zilizopatikana</div>';
+    return;
+  }
+
+  // Remove duplicates by SKU or name
+  const uniqueProducts = [];
+  const seen = new Set();
+  productsToRender.forEach(p => {
+    const key = p.sku || p.name;
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueProducts.push(p);
+    }
+  });
+
+  grid.innerHTML = uniqueProducts.map(p => `
+    <div class="pos-product" data-id="${p.id}">
+      <strong>${p.name}</strong>
+      <span>${window.money(p.selling_price)}</span>
+      <small>Stock: ${p.stock_quantity}</small>
+    </div>
+  `).join('');
+
+  // Add click listeners
+  grid.querySelectorAll('.pos-product').forEach(card => {
+    card.addEventListener('click', () => {
+      const productId = card.dataset.id;
+      addToCart(productId);
+    });
+  });
+}
+
+function setupEventListeners() {
+  // Search
+  document.getElementById('pos-search').addEventListener('input', (e) => {
+    const search = e.target.value.toLowerCase();
+    const filtered = products.filter(p => 
+      p.name.toLowerCase().includes(search) || 
+      (p.sku && p.sku.toLowerCase().includes(search))
     );
+    renderProductsGrid(filtered);
+  });
 
-    productsContainer.innerHTML = filtered.map(p => `
-      <button class="pos-product" data-id="${p.id}" type="button">
-        <strong>${window.escapeHTML(p.name)}</strong>
-        <span>${window.money(p.selling_price)}</span>
-        <small>Stock: ${p.stock_quantity}</small>
-      </button>
-    `).join("") || `<p class="empty-state">Hakuna bidhaa iliyopatikana.</p>`;
+  // Clear cart
+  document.getElementById('clear-cart').addEventListener('click', () => {
+    if (confirm('Je, una uhakika unataka kufuta bidhaa zote kwenye cart?')) {
+      cart = [];
+      renderCart();
+    }
+  });
 
-    productsContainer.querySelectorAll("[data-id]").forEach(button => {
-      button.addEventListener("click", () => addProduct(button.dataset.id));
+  // Discount
+  document.getElementById('discount').addEventListener('input', () => {
+    updateTotals();
+  });
+
+  // Amount paid
+  document.getElementById('amount-paid').addEventListener('input', () => {
+    updateTotals();
+  });
+
+  // Complete sale
+  document.getElementById('complete-sale').addEventListener('click', completeSale);
+}
+
+function addToCart(productId) {
+  const product = products.find(p => p.id === productId);
+  if (!product) return;
+
+  const existingItem = cart.find(item => item.id === productId);
+  
+  if (existingItem) {
+    if (existingItem.quantity < product.stock_quantity) {
+      existingItem.quantity += 1;
+    } else {
+      alert(`Stock ya "${product.name}" haitoshi!`);
+      return;
+    }
+  } else {
+    cart.push({
+      id: product.id,
+      name: product.name,
+      price: product.selling_price,
+      cost: product.cost_price,
+      quantity: 1,
+      stock: product.stock_quantity
     });
   }
 
-  function addProduct(id) {
-    const product = products.find(p => p.id === id);
-    if (!product) return;
+  renderCart();
+}
 
-    const current = cart.get(id);
-    const nextQuantity = (current?.quantity || 0) + 1;
-
-    if (nextQuantity > product.stock_quantity) {
-      message.textContent = "Idadi imezidi stock iliyopo.";
-      message.className = "form-message error";
-      return;
-    }
-
-    cart.set(id, { product, quantity: nextQuantity });
-    message.textContent = "";
-    drawCart();
+function renderCart() {
+  const cartItems = document.getElementById('cart-items');
+  
+  if (cart.length === 0) {
+    cartItems.innerHTML = '<div class="empty-state">Bado hujachagua bidhaa.</div>';
+    updateTotals();
+    return;
   }
 
-  function drawCart() {
-    const items = [...cart.values()];
-
-    cartContainer.innerHTML = items.length ? items.map(item => `
-      <div class="cart-item">
-        <div class="cart-item-name">
-          <strong>${window.escapeHTML(item.product.name)}</strong>
-          <small>${window.money(item.product.selling_price)} kila moja</small>
-        </div>
-        <div class="quantity-controls">
-          <button type="button" data-minus="${item.product.id}">−</button>
-          <span>${item.quantity}</span>
-          <button type="button" data-plus="${item.product.id}">+</button>
-        </div>
-        <strong>${window.money(item.quantity * Number(item.product.selling_price))}</strong>
+  cartItems.innerHTML = cart.map((item, index) => `
+    <div class="cart-item">
+      <div class="cart-item-name">
+        <strong>${item.name}</strong>
+        <small>${window.money(item.price)} × ${item.quantity}</small>
       </div>
-    `).join("") : `<p class="empty-state">Bado hujachagua bidhaa.</p>`;
+      <div class="quantity-controls">
+        <button onclick="updateQuantity(${index}, -1)">−</button>
+        <span>${item.quantity}</span>
+        <button onclick="updateQuantity(${index}, 1)">+</button>
+      </div>
+      <div class="cart-item-price">${window.money(item.price * item.quantity)}</div>
+    </div>
+  `).join('');
 
-    cartContainer.querySelectorAll("[data-minus]").forEach(button => {
-      button.addEventListener("click", () => {
-        const id = button.dataset.minus;
-        const item = cart.get(id);
-        if (!item) return;
+  updateTotals();
+}
 
-        if (item.quantity <= 1) cart.delete(id);
-        else item.quantity--;
+window.updateQuantity = (index, change) => {
+  const item = cart[index];
+  const newQty = item.quantity + change;
+  
+  if (newQty <= 0) {
+    cart.splice(index, 1);
+  } else if (newQty <= item.stock) {
+    item.quantity = newQty;
+  } else {
+    alert(`Stock ya "${item.name}" haitoshi!`);
+    return;
+  }
+  
+  renderCart();
+};
 
-        drawCart();
-      });
-    });
+function updateTotals() {
+  const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const discount = parseFloat(document.getElementById('discount').value) || 0;
+  const total = Math.max(0, subtotal - discount);
+  const amountPaid = parseFloat(document.getElementById('amount-paid').value) || 0;
+  const balance = Math.max(0, total - amountPaid);
 
-    cartContainer.querySelectorAll("[data-plus]").forEach(button => {
-      button.addEventListener("click", () => addProduct(button.dataset.plus));
-    });
+  document.getElementById('subtotal').textContent = window.money(subtotal);
+  document.getElementById('total').innerHTML = `<strong>${window.money(total)}</strong>`;
+  document.getElementById('balance').textContent = window.money(balance);
+}
 
-    updateTotal();
+async function completeSale() {
+  if (cart.length === 0) {
+    alert('Cart ni tupu! Chagua bidhaa kwanza.');
+    return;
   }
 
-  function updateTotal() {
-    const subtotal = [...cart.values()].reduce(
-      (sum, item) => sum + Number(item.product.selling_price) * item.quantity, 0
-    );
+  const message = document.getElementById('sale-message');
+  const button = document.getElementById('complete-sale');
+  
+  button.disabled = true;
+  button.textContent = 'Inachakata...';
 
-    const discount = Math.max(0, Number(discountInput.value || 0));
+  try {
+    const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const discount = parseFloat(document.getElementById('discount').value) || 0;
     const total = Math.max(0, subtotal - discount);
+    const amountPaid = parseFloat(document.getElementById('amount-paid').value) || 0;
+    const paymentMethod = document.getElementById('payment-method').value;
 
-    root.querySelector("#pos-total").textContent = window.money(total);
-    return { subtotal, discount, total };
-  }
+    const items = cart.map(item => ({
+      product_id: item.id,
+      quantity: item.quantity
+    }));
 
-  search.addEventListener("input", drawProducts);
-  discountInput.addEventListener("input", updateTotal);
-
-  root.querySelector("#clear-cart").addEventListener("click", () => {
-    cart.clear();
-    drawCart();
-  });
-
-  methodInput.addEventListener("change", () => {
-    tenderedInput.required = methodInput.value === "cash";
-  });
-
-  root.querySelector("#complete-sale").addEventListener("click", async event => {
-    if (!cart.size) {
-      message.textContent = "Chagua angalau bidhaa moja.";
-      message.className = "form-message error";
-      return;
-    }
-
-    const { discount, total } = updateTotal();
-    const method = methodInput.value;
-    const tendered = Number(tenderedInput.value || 0);
-
-    if (method === "cash" && tendered < total) {
-      message.textContent = "Kiasi kilichopokelewa hakitoshi.";
-      message.className = "form-message error";
-      return;
-    }
-
-    if (profile.role !== "owner" && discount > 0) {
-      message.textContent = "Discount inahitaji ruhusa ya Owner.";
-      message.className = "form-message error";
-      return;
-    }
-
-    const button = event.currentTarget;
-    button.disabled = true;
-    button.textContent = "Inakamilisha mauzo...";
-    message.textContent = "";
-
-    try {
-      // UUID mpya kwa ombi hili la mauzo.
-      const idempotencyKey = crypto.randomUUID();
-
-      const items = [...cart.values()].map(item => ({
-        product_id: item.product.id,
-        quantity: item.quantity
-      }));
-
-      const { data: sale, error } = await supabase.rpc("complete_sale", {
-        p_idempotency_key: idempotencyKey,
-        p_items: items,
-        p_discount: discount,
-        p_payment_method: method,
-        p_amount_tendered: tendered,
-        p_payment_reference: null
-      });
-
-      if (error) throw error;
-
-      const { data: saleItems, error: itemError } = await supabase
-        .from("sale_items")
-        .select("*")
-        .eq("sale_id", sale.sale_id);
-
-      if (itemError) throw itemError;
-
-      const { data: payment } = await supabase
-        .from("payments")
-        .select("*")
-        .eq("sale_id", sale.sale_id)
-        .maybeSingle();
-
-      root.querySelector("#receipt-area").innerHTML = `
-        <section class="receipt" id="receipt">
-          <div class="receipt-center">
-            <h2>StationeryPro</h2>
-            <p>Powered by Mozz Elly</p>
-            <p>RISITI YA MAUZO</p>
-          </div>
-          <hr>
-          <p>Risiti: ${window.escapeHTML(sale.receipt_number)}</p>
-          <p>Tarehe: ${new Date().toLocaleString()}</p>
-          <p>Cashier: ${window.escapeHTML(profile.full_name || user.email)}</p>
-          <hr>
-          ${(saleItems || []).map(item => `
-            <div class="receipt-row">
-              <span>${window.escapeHTML(item.product_name)} × ${item.quantity}</span>
-              <span>${window.money(item.line_total)}</span>
-            </div>
-          `).join("")}
-          <hr>
-          <div class="receipt-row"><span>Subtotal</span><span>${window.money(sale.subtotal)}</span></div>
-          <div class="receipt-row"><span>Discount</span><span>${window.money(sale.discount)}</span></div>
-          <div class="receipt-row receipt-total"><strong>JUMLA</strong><strong>${window.money(sale.total)}</strong></div>
-          <p>Malipo: ${window.escapeHTML(payment?.method || method)}</p>
-          <p>Imepokelewa: ${window.money(payment?.amount_tendered ?? sale.total)}</p>
-          <p>Baki: ${window.money(sale.change_due || 0)}</p>
-          <hr>
-          <p class="receipt-center">Asante kwa kununua nasi!</p>
-          <button class="btn btn-primary full-width no-print" id="print-receipt">Chapisha risiti</button>
-        </section>
-      `;
-
-      root.querySelector("#print-receipt").addEventListener("click", () => window.print());
-
-      cart.clear();
-      drawCart();
-      discountInput.value = "0";
-      tenderedInput.value = "0";
-      await reloadProducts();
-
-      message.textContent = `Mauzo yamekamilika. Risiti: ${sale.receipt_number}`;
-      message.className = "form-message success";
-    } catch (error) {
-      message.textContent = error.message || "Mauzo hayakukamilika.";
-      message.className = "form-message error";
-    } finally {
-      button.disabled = false;
-      button.textContent = "Kamilisha mauzo";
-    }
-  });
-
-  async function reloadProducts() {
-    const { data, error } = await supabase
-      .from("products")
-      .select("id,name,sku,barcode,selling_price,stock_quantity")
-      .eq("active", true)
-      .gt("stock_quantity", 0)
-      .order("name");
+    const { data, error } = await supabase.rpc('complete_sale', {
+      p_items: items,
+      p_payment_method: paymentMethod,
+      p_amount_paid: amountPaid,
+      p_discount: discount
+    });
 
     if (error) throw error;
-    products = data || [];
-    drawProducts();
-  }
 
-  drawProducts();
-  drawCart();
+    message.textContent = `Mauzo yamekamilika! Risiti: ${data.receipt_number}`;
+    message.className = 'form-message success';
+    message.style.display = 'block';
+
+    // Reset
+    cart = [];
+    document.getElementById('discount').value = 0;
+    document.getElementById('amount-paid').value = 0;
+    renderCart();
+    await loadProducts();
+
+    setTimeout(() => {
+      message.style.display = 'none';
+    }, 5000);
+
+  } catch (error) {
+    console.error('Sale error:', error);
+    message.textContent = error.message || 'Imeshindikana kukamilisha mauzo.';
+    message.className = 'form-message error';
+    message.style.display = 'block';
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Kamilisha mauzo';
+  }
 }
