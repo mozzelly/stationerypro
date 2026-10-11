@@ -1,4 +1,4 @@
-
+```html
 <!doctype html>
 <html lang="sw">
 <head>
@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#123b2a">
   <meta name="description" content="StationeryPro — Mfumo wa kusimamia stationery, bidhaa, stock na mauzo. Powered by Mozz Elly.">
 
-  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="manifest" href="./manifest.webmanifest">
 
   <title>StationeryPro — Powered by Mozz Elly</title>
 
@@ -40,7 +40,7 @@
       width: 100%;
       max-width: 400px;
       padding: 36px 28px;
-      background: #ffffff;
+      background: #fff;
       border: 1px solid #e1eae4;
       border-radius: 18px;
       text-align: center;
@@ -56,7 +56,7 @@
       justify-content: center;
       border-radius: 16px;
       background: #123b2a;
-      color: #ffffff;
+      color: #fff;
       font-size: 23px;
       font-weight: 800;
       letter-spacing: 1px;
@@ -71,6 +71,7 @@
       color: #68786e;
       font-size: 14px;
       line-height: 1.7;
+      overflow-wrap: anywhere;
     }
 
     .startup-spinner {
@@ -84,9 +85,20 @@
     }
 
     .startup-error {
-      color: #b42318;
-      font-size: 14px;
-      line-height: 1.6;
+      color: #b42318 !important;
+    }
+
+    .startup-details {
+      display: none;
+      margin-top: 16px;
+      padding: 12px;
+      background: #fff1f0;
+      border-radius: 8px;
+      color: #912018;
+      text-align: left;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
     }
 
     @keyframes spin {
@@ -109,10 +121,11 @@
       <section class="startup-card">
         <div class="startup-logo">SP</div>
         <h1>StationeryPro</h1>
-        <p id="startup-message">
+        <p id="startup-message" role="status">
           Tunaandaa mfumo wako. Tafadhali subiri...
         </p>
         <div class="startup-spinner" aria-hidden="true"></div>
+        <pre id="startup-details" class="startup-details"></pre>
       </section>
     </main>
   </div>
@@ -120,25 +133,48 @@
   <script>
     window.__stationeryProStarted = false;
 
-    window.setTimeout(() => {
-      if (window.__stationeryProStarted) return;
-
-      const message = document.getElementById("startup-message");
-
-      if (message) {
-        message.textContent =
-          "Mfumo haujaanza vizuri. Tafadhali kagua JavaScript Console kwa taarifa za hitilafu.";
-        message.className = "startup-error";
-      }
-
+    window.__stationeryProShowError = function (message) {
+      const status = document.getElementById("startup-message");
       const spinner = document.querySelector(".startup-spinner");
+      const details = document.getElementById("startup-details");
+
+      if (status) {
+        status.textContent =
+          "StationeryPro haijaweza kuanza. Taarifa ya hitilafu iko hapa chini.";
+        status.className = "startup-error";
+      }
 
       if (spinner) {
         spinner.style.display = "none";
       }
-    }, 10000);
+
+      if (details) {
+        details.style.display = "block";
+        details.textContent = String(message || "Hitilafu haijulikani.");
+      }
+    };
+
+    window.setTimeout(function () {
+      if (window.__stationeryProStarted) return;
+
+      window.__stationeryProShowError(
+        "Mfumo haujathibitisha kuanza ndani ya sekunde 15. " +
+        "Angalia JavaScript Console na Network kwa faili zilizoshindwa kupakiwa."
+      );
+    }, 15000);
+
+    window.addEventListener("error", function (event) {
+      if (event.message) {
+        console.error("[StationeryPro] JavaScript error:", event.message);
+      }
+    });
+
+    window.addEventListener("unhandledrejection", function (event) {
+      console.error("[StationeryPro] Promise error:", event.reason);
+    });
   </script>
 
-  <script type="module" src="/src/main.js"></script>
+  <script type="module" src="./src/main.js"></script>
 </body>
 </html>
+```

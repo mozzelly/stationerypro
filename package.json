@@ -1,7 +1,7 @@
 {
   "name": "stationerypro",
-  "version": "1.0.0",
   "private": true,
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,9 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.57.0"
+    "@supabase/supabase-js": "^2.57.0",
+    "lucide": "^0.468.0"
   },
   "devDependencies": {
-    "vite": "^6.3.5"
+    "vite": "^6.0.0"
   }
 }

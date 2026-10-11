@@ -1,57 +1,63 @@
-import { signIn } from "../auth/auth.js";
+import { signIn, getProfile } from '../auth/auth.js';
 
 export function renderLogin(root) {
   root.innerHTML = `
-    <main class="login-screen">
-      <form id="login-form" class="login-card">
-        <div class="brand-mark">SP</div>
-        <p class="eyebrow">POWERED BY MOZZ ELLY</p>
-        <h1>StationeryPro</h1>
-        <p class="muted">Ingia kusimamia biashara yako.</p>
+    <main class="login-page">
+      <section class="login-brand">
+        <div class="brand-logo">SP</div>
+        <p class="eyebrow">STATIONERY MANAGEMENT SYSTEM</p>
+        <h1>Simamia biashara yako kwa uhakika.</h1>
+        <p>Mauzo, bidhaa, stock na ripoti zako sehemu moja.</p>
+      </section>
 
-        <label for="email">Email</label>
-        <input id="email" type="email" required
-          autocomplete="username" placeholder="name@example.com">
+      <section class="login-panel">
+        <form id="login-form" class="login-form">
+          <p class="eyebrow">KARIBU TENA</p>
+          <h2>Ingia kwenye akaunti</h2>
+          <p class="muted">Tumia barua pepe na nenosiri lako.</p>
 
-        <label for="password">Password</label>
-        <input id="password" type="password" required
-          autocomplete="current-password" placeholder="Password yako">
+          <label>Barua pepe
+            <input name="email" type="email" autocomplete="username"
+              placeholder="jina@biashara.com" required>
+          </label>
 
-        <button class="btn btn-primary full-width" type="submit">
-          Ingia kwenye mfumo
-        </button>
+          <label>Nenosiri
+            <input name="password" type="password"
+              autocomplete="current-password" required>
+          </label>
 
-        <p id="login-message" class="form-message"></p>
-        <p class="muted small">StationeryPro — Powered by Mozz Elly</p>
-      </form>
+          <p id="login-error" class="error-message"></p>
+          <button class="btn btn-primary" type="submit">Ingia</button>
+        </form>
+      </section>
     </main>
   `;
 
-  const form = root.querySelector("#login-form");
-  const message = root.querySelector("#login-message");
+  const form = root.querySelector('#login-form');
+  const errorBox = root.querySelector('#login-error');
+  const button = form.querySelector('button');
 
-  form.addEventListener("submit", async event => {
+  form.addEventListener('submit', async (event) => {
     event.preventDefault();
-
-    const button = form.querySelector("button");
+    errorBox.textContent = '';
     button.disabled = true;
-    button.textContent = "Inaingia...";
-    message.textContent = "";
+    button.textContent = 'Inaingia...';
 
     try {
-      await signIn(
-        root.querySelector("#email").value.trim(),
-        root.querySelector("#password").value
-      );
+      const values = new FormData(form);
+      await signIn(values.get('email'), values.get('password'));
+      const profile = await getProfile();
 
-      location.hash = "#dashboard";
-      location.reload();
+      window.dispatchEvent(
+        new CustomEvent('stationery:navigate', {
+          detail: profile.role === 'cashier' ? 'pos' : 'dashboard',
+        })
+      );
     } catch (error) {
-      message.textContent = error.message || "Imeshindikana kuingia.";
-      message.className = "form-message error";
+      errorBox.textContent = error.message || 'Imeshindikana kuingia.';
     } finally {
       button.disabled = false;
-      button.textContent = "Ingia kwenye mfumo";
+      button.textContent = 'Ingia';
     }
   });
 }

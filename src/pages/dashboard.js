@@ -1,120 +1,103 @@
-import { supabase } from "../lib/supabase.js";
+import { requireSupabase } from '../lib/supabase.js';
 
-export async function renderDashboard(root, user, profile) {
-  if (profile.role !== "owner") {
-    root.innerHTML = `<div class="notice">Dashboard hii inapatikana kwa Owner.</div>`;
-    return;
-  }
+const money = (value) =>
+  new Intl.NumberFormat('en-TZ', {
+    style: 'currency',
+    currency: 'TZS',
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
 
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-
-  const [salesResult, productsResult, expensesResult] = await Promise.all([
-    supabase.from("sales")
-      .select("id,total,status,created_at")
-      .gte("created_at", start.toISOString())
-      .eq("status", "completed"),
-    supabase.from("products")
-      .select("id,name,stock_quantity,reorder_level,selling_price,cost_price")
-      .eq("active", true),
-    supabase.from("expenses")
-      .select("amount")
-      .gte("created_at", start.toISOString())
-  ]);
-
-  for (const result of [salesResult, productsResult, expensesResult]) {
-    if (result.error) throw result.error;
-  }
-
-  const sales = salesResult.data || [];
-  const products = productsResult.data || [];
-  const expenses = expensesResult.data || [];
-
-  const revenue = sales.reduce((sum, sale) => sum + Number(sale.total), 0);
-  const expenseTotal = expenses.reduce((sum, item) => sum + Number(item.amount), 0);
-  const lowStock = products.filter(p => p.stock_quantity <= p.reorder_level);
-
-  const salesIds = sales.map(s => s.id);
-  let grossProfit = 0;
-
-  if (salesIds.length) {
-    const { data: items, error } = await supabase
-      .from("sale_items")
-      .select("sale_id,quantity,unit_cost")
-      .in("sale_id", salesIds);
-
-    if (error) throw error;
-
-    const cost = (items || []).reduce(
-      (sum, item) => sum + Number(item.quantity) * Number(item.unit_cost), 0
-    );
-
-    grossProfit = revenue - cost;
-  }
-
+export async function renderDashboard(root) {
   root.innerHTML = `
-    <div class="welcome-row">
-      <div><h2>Habari, ${window.escapeHTML(profile.full_name || "Owner")}</h2>
-        <p class="muted">Muhtasari wa biashara yako leo.</p></div>
-      <button class="btn btn-secondary" id="refresh-dashboard">Refresh</button>
-    </div>
-
-    <div class="stats-grid">
-      <article class="stat-card">
-        <span class="stat-label">Mauzo ya leo</span>
-        <strong>${window.money(revenue)}</strong>
-        <small>${sales.length} transaction(s)</small>
-      </article>
-      <article class="stat-card">
-        <span class="stat-label">Faida ghafi ya mauzo ya leo</span>
-        <strong>${window.money(grossProfit)}</strong>
-        <small>Kabla ya matumizi mengine</small>
-      </article>
-      <article class="stat-card">
-        <span class="stat-label">Matumizi ya leo</span>
-        <strong>${window.money(expenseTotal)}</strong>
-        <small>Matumizi yaliyorekodiwa</small>
-      </article>
-      <article class="stat-card">
-        <span class="stat-label">Bidhaa za tahadhari</span>
-        <strong>${lowStock.length}</strong>
-        <small>Kiwango cha stock kimefikiwa</small>
-      </article>
-    </div>
-
-    <div class="content-grid">
-      <section class="panel">
-        <div class="panel-heading">
-          <h3>Stock inayohitaji kuangaliwa</h3>
-          <a href="#products">Angalia bidhaa</a>
-        </div>
-        ${lowStock.length ? `
-          <div class="table-wrap"><table>
-            <thead><tr><th>Bidhaa</th><th>Stock</th><th>Kiwango cha chini</th></tr></thead>
-            <tbody>${lowStock.map(p => `
-              <tr>
-                <td>${window.escapeHTML(p.name)}</td>
-                <td><span class="stock-warning">${p.stock_quantity}</span></td>
-                <td>${p.reorder_level}</td>
-              </tr>`).join("")}
-            </tbody>
-          </table></div>` : `<p class="empty-state">Hakuna bidhaa za tahadhari kwa sasa.</p>`}
-      </section>
-
-      <section class="panel">
-        <div class="panel-heading"><h3>Vitendo vya haraka</h3></div>
-        <div class="quick-actions">
-          <a class="quick-action" href="#pos"><strong>＋</strong><span>Anza mauzo</span></a>
-          <a class="quick-action" href="#products"><strong>▤</strong><span>Bidhaa na stock</span></a>
-          <a class="quick-action" href="#expenses"><strong>−</strong><span>Rekodi matumizi</span></a>
-          <a class="quick-action" href="#reports"><strong>▥</strong><span>Ripoti</span></a>
-        </div>
-      </section>
-    </div>
-    <p class="muted small">Takwimu zinatokana na rekodi zilizohifadhiwa Supabase.</p>
+    <section class="page-heading">
+      <div>
+        <p class="eyebrow">MUHTASARI WA BIASHARA</p>
+        <h1>Dashboard</h1>
+        <p class="muted">Muhtasari wa mauzo na hali ya bidhaa.</p>
+      </div>
+    </section>
+    <p id="dashboard-error" class="error-message"></p>
+    <section class="stats-grid" id="dashboard-stats">
+      <article class="stat-card"><span>Mauzo ya leo</span><strong>Inapakia...</strong></article>
+      <article class="stat-card"><span>Idadi ya bidhaa</span><strong>Inapakia...</strong></article>
+      <article class="stat-card"><span>Stock inayoisha</span><strong>Inapakia...</strong></article>
+      <article class="stat-card"><span>Matumizi ya leo</span><strong>Inapakia...</strong></article>
+    </section>
+    <section class="panel">
+      <h2>Bidhaa zenye stock ndogo</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Bidhaa</th><th>Stock</th><th>Bei ya kuuza</th></tr></thead>
+          <tbody id="low-stock-body"></tbody>
+        </table>
+      </div>
+    </section>
   `;
 
-  root.querySelector("#refresh-dashboard").addEventListener("click", () => {
-    renderDashboard(root, user, profile).catch(e => alert(e.message));
-  });
+  try {
+    const db = requireSupabase();
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+
+    const [salesResult, productsResult, expensesResult, lowStockResult] =
+      await Promise.all([
+        db.from('sales')
+          .select('total')
+          .gte('created_at', start.toISOString())
+          .eq('status', 'completed'),
+
+        db.from('products')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true),
+
+        db.from('expenses')
+          .select('amount')
+          .gte('created_at', start.toISOString()),
+
+        db.from('products')
+          .select('id, name, stock_quantity, selling_price')
+          .eq('is_active', true)
+          .filter('stock_quantity', 'lte', 'reorder_level')
+          .order('stock_quantity'),
+      ]);
+
+    for (const result of [salesResult, productsResult, expensesResult, lowStockResult]) {
+      if (result.error) throw result.error;
+    }
+
+    const totalSales = salesResult.data.reduce(
+      (sum, sale) => sum + Number(sale.total || 0), 0
+    );
+
+    const totalExpenses = expensesResult.data.reduce(
+      (sum, expense) => sum + Number(expense.amount || 0), 0
+    );
+
+    const lowStock = lowStockResult.data || [];
+
+    root.querySelector('#dashboard-stats').innerHTML = `
+      <article class="stat-card"><span>Mauzo ya leo</span><strong>${money(totalSales)}</strong></article>
+      <article class="stat-card"><span>Bidhaa hai</span><strong>${productsResult.count || 0}</strong></article>
+      <article class="stat-card"><span>Stock ndogo</span><strong>${lowStock.length}</strong></article>
+      <article class="stat-card"><span>Matumizi ya leo</span><strong>${money(totalExpenses)}</strong></article>
+    `;
+
+    root.querySelector('#low-stock-body').innerHTML = lowStock.length
+      ? lowStock.map((product) => `
+          <tr>
+            <td>${escapeHtml(product.name)}</td>
+            <td>${Number(product.stock_quantity)}</td>
+            <td>${money(product.selling_price)}</td>
+          </tr>
+        `).join('')
+      : '<tr><td colspan="3">Hakuna bidhaa zenye stock ndogo.</td></tr>';
+  } catch (error) {
+    root.querySelector('#dashboard-error').textContent = error.message;
+  }
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[char]);
 }
