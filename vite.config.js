@@ -1,9 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  // HII NDIO MUHIMU KWA GITHUB PAGES
-  base: '/stationerypro/',
-  
+  base: './',  // <-- BADILISHA HII: Tumia relative path
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
