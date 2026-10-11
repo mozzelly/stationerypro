@@ -3,10 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#123b2a">
+  <meta name="theme-color" content="#1456c0">
   <meta name="description" content="StationeryPro — Mfumo wa kusimamia stationery, bidhaa, stock na mauzo. Powered by Mozz Elly.">
 
-  <link rel="manifest" href="./manifest.webmanifest">
+  <!-- Favicon inline (hakuna file ya nje inayohitajika) -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231456c0'/><text x='50' y='65' font-size='50' font-weight='bold' fill='white' text-anchor='middle'>SP</text></svg>" />
+
+  <!-- Manifest inline (hakuna file ya nje inayohitajika) -->
+  <link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjoiU3RhdGlvbmVyeVBybyIsInNob3J0X25hbWUiOiJTUCIsInN0YXJ0X3VybCI6Ii4iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjZmZmZmZmIiwidGhlbWVfY29sb3IiOiIjMTQ1NmMwIn0=">
 
   <title>StationeryPro — Powered by Mozz Elly</title>
 
@@ -54,7 +58,7 @@
       align-items: center;
       justify-content: center;
       border-radius: 16px;
-      background: #123b2a;
+      background: #1456c0;
       color: #fff;
       font-size: 23px;
       font-weight: 800;
@@ -78,7 +82,7 @@
       height: 30px;
       margin: 24px auto 0;
       border: 3px solid #dce8df;
-      border-top-color: #123b2a;
+      border-top-color: #1456c0;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
@@ -173,7 +177,7 @@
     });
   </script>
 
-  <!-- BADILISHA HII LINE -->
-  <script type="module" src="./src/main.js"></script>
+  <!-- Hii ndio line muhimu - Vite itaibadilisha kiotomatiki wakati wa build -->
+  <script type="module" src="/src/main.js"></script>
 </body>
 </html>
