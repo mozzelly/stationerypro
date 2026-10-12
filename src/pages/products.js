@@ -282,7 +282,40 @@ window.editProduct = async (id) => {
 
 window.deleteProduct = async (id) => {
   if (!confirm('Je, una uhakika unataka kufuta bidhaa hii?')) return;
+  
+  // Jaribu kufuta kwanza
   const { error } = await supabase.from('products').delete().eq('id', id);
-  if (error) return alert('Hitilafu: ' + error.message);
+
+  // Kama kuna error inayohusiana na mauzo (foreign key)
+  if (error && error.message.includes('sale_items_product_id_fkey')) {
+    alert('⚠️ Huwezi kufuta bidhaa hii kwa sababu tayari imekwishaingia kwenye mauzo (risiti).\n\nBadala yake, mfumo utaiweka Stock iwe 0 na kuibadilisha jina kuwa "ZIMEISHA".');
+    
+    // Badilisha jina na stock badala ya kufuta
+    const { error: updateError } = await supabase
+      .from('products')
+      .update({ 
+        name: 'ZIMEISHA - ' + Date.now(), 
+        stock_quantity: 0,
+        selling_price: 0,
+        cost_price: 0
+      })
+      .eq('id', id);
+
+    if (updateError) {
+      alert('Hitilafu: ' + updateError.message);
+      return;
+    }
+    
+    loadProducts(); // Refresh jedwali
+    return;
+  }
+
+  // Kama kuna error nyingine yoyote
+  if (error) {
+    alert('Hitilafu: ' + error.message);
+    return;
+  }
+
+  // Kama imefutwa vizuri
   loadProducts();
 };
