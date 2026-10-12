@@ -164,11 +164,11 @@ async function loadSystemStats() {
 
 async function loadPendingOwners() {
   const { data: pending, error } = await supabase
-    .from('profiles')
-    .select(`*, business_settings(business_name, business_address)`)
-    .eq('role', 'owner')
-    .eq('is_approved', false)
-    .order('created_at', { ascending: false });
+  .from('profiles')
+  .select(`*, business_settings(business_name, business_address)`)
+  .eq('role', 'owner')
+  .eq('is_approved', false)
+  .order('created_at', { ascending: false });
 
   if (error) {
     console.error('Error loading pending:', error);

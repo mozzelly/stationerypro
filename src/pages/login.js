@@ -59,7 +59,7 @@ export function renderLogin(root) {
         .eq('id', data.user.id)
         .single();
 
-      if (!profile.is_approved) {
+      if (!profile || !profile.is_approved) {
         await supabase.auth.signOut();
         errorBox.textContent = 'Akaunti yako bado haijakubaliwa na Developer. Subiri uthibitisho.';
         errorBox.style.display = 'block';
@@ -184,7 +184,7 @@ function renderSignup(root) {
       const businessLocation = form.businessLocation.value;
       const businessPhone = form.businessPhone.value;
 
-      // Sign up - trigger itaweka is_approved=false
+      // 1. Sign up - create auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
@@ -199,8 +199,26 @@ function renderSignup(root) {
 
       if (authError) throw authError;
 
-      // Create business settings for this owner
+      // 2. Create profile na business settings explicitly
       if (authData.user) {
+        // HAKIKISHA: role ni 'owner' na is_approved ni 'false'
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: authData.user.id,
+            full_name: fullName,
+            email: email,
+            phone: phone,
+            role: 'owner',
+            is_approved: false,
+            active: true
+          }, {
+            onConflict: 'id'
+          });
+
+        if (profileError) console.error('Profile error:', profileError);
+
+        // Create business settings
         const { error: businessError } = await supabase
           .from('business_settings')
           .insert({
