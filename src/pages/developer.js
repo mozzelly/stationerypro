@@ -21,43 +21,43 @@ export async function renderDeveloper(root, user, profile) {
       </div>
 
       <div class="stats-grid">
-        <div class="stat-card">
+        <div class="stat-card" style="cursor: pointer;" onclick="showUsersList('all_owners')">
           <div class="stat-icon" style="background: #dbeafe; color: #1e40af;">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           </div>
           <div class="stat-content">
             <p class="stat-label">Jumla ya Owners</p>
-            <h3 class="stat-value" id="total-owners">0</h3>
+            <h3 class="stat-value" id="total-owners">...</h3>
           </div>
         </div>
         
-        <div class="stat-card">
+        <div class="stat-card" style="cursor: pointer;" onclick="showUsersList('pending')">
           <div class="stat-icon" style="background: #fef3c7; color: #92400e;">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           </div>
           <div class="stat-content">
             <p class="stat-label">Wanasubiri Uthibitisho</p>
-            <h3 class="stat-value" id="pending-count">0</h3>
+            <h3 class="stat-value" id="pending-count">...</h3>
           </div>
         </div>
         
-        <div class="stat-card">
+        <div class="stat-card" style="cursor: pointer;" onclick="showUsersList('approved')">
           <div class="stat-icon" style="background: #dcfce7; color: #166534;">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
           </div>
           <div class="stat-content">
             <p class="stat-label">Wamepitishwa (Active)</p>
-            <h3 class="stat-value" id="approved-count">0</h3>
+            <h3 class="stat-value" id="approved-count">...</h3>
           </div>
         </div>
 
-        <div class="stat-card">
+        <div class="stat-card" style="cursor: pointer;" onclick="showUsersList('cashiers')">
           <div class="stat-icon" style="background: #fce7f3; color: #9d174d;">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           </div>
           <div class="stat-content">
             <p class="stat-label">Jumla ya Cashiers</p>
-            <h3 class="stat-value" id="total-cashiers">0</h3>
+            <h3 class="stat-value" id="total-cashiers">...</h3>
           </div>
         </div>
 
@@ -67,7 +67,7 @@ export async function renderDeveloper(root, user, profile) {
           </div>
           <div class="stat-content">
             <p class="stat-label">Jumla ya Bidhaa</p>
-            <h3 class="stat-value" id="total-products">0</h3>
+            <h3 class="stat-value" id="total-products">...</h3>
           </div>
         </div>
 
@@ -77,12 +77,25 @@ export async function renderDeveloper(root, user, profile) {
           </div>
           <div class="stat-content">
             <p class="stat-label">Jumla ya Mauzo</p>
-            <h3 class="stat-value" id="total-sales">0</h3>
+            <h3 class="stat-value" id="total-sales">...</h3>
           </div>
         </div>
       </div>
 
-      <div class="section-title">
+      <!-- Modal ya kuonyesha orodha ya users -->
+      <div id="users-modal" class="modal-overlay" style="display: none;">
+        <div class="modal" style="max-width: 800px;">
+          <div class="modal-header">
+            <h3 id="modal-title">Orodha ya Watumiaji</h3>
+            <button class="modal-close" onclick="closeUsersModal()">×</button>
+          </div>
+          <div class="modal-body">
+            <div id="users-list-content">Inapakia...</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-title" style="margin-top: 32px;">
         <h2>Ombi Mpya za Owners (Zinasubiri Uthibitisho)</h2>
       </div>
 
@@ -164,11 +177,11 @@ async function loadSystemStats() {
 
 async function loadPendingOwners() {
   const { data: pending, error } = await supabase
-  .from('profiles')
-  .select(`*, business_settings(business_name, business_address)`)
-  .eq('role', 'owner')
-  .eq('is_approved', false)
-  .order('created_at', { ascending: false });
+    .from('profiles')
+    .select(`*, business_settings(business_name, business_address)`)
+    .eq('role', 'owner')
+    .eq('is_approved', false)
+    .order('created_at', { ascending: false });
 
   if (error) {
     console.error('Error loading pending:', error);
@@ -221,7 +234,7 @@ async function loadApprovedOwners() {
   // Get cashier and product counts for each owner
   const approvedWithCounts = await Promise.all(approved.map(async (owner) => {
     const { count: cashierCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('owner_id', owner.id);
-    const { count: productCount } = await supabase.from('products').select('*', { count: 'exact', head: true }).eq('owner_id', owner.id); // Kama products ina owner_id
+    const { count: productCount } = await supabase.from('products').select('*', { count: 'exact', head: true }).eq('owner_id', owner.id);
     return { ...owner, cashier_count: cashierCount || 0, product_count: productCount || 0 };
   }));
 
@@ -234,14 +247,79 @@ async function loadApprovedOwners() {
       <td>${p.product_count} bidhaa</td>
       <td>${p.active ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Inactive</span>'}</td>
       <td>
-        <button class="btn btn-sm ${p.active ? 'btn-danger' : 'btn-success'}" 
-                onclick="toggleOwner('${p.id}', ${!p.active})">
+        <button class="btn btn-sm ${p.active ? 'btn-danger' : 'btn-success'}" onclick="toggleOwner('${p.id}', ${!p.active})">
           ${p.active ? 'Funga' : 'Fungua'}
         </button>
       </td>
     </tr>
   `).join('');
 }
+
+// Function to show users list in modal
+window.showUsersList = async (type) => {
+  const modal = document.getElementById('users-modal');
+  const title = document.getElementById('modal-title');
+  const content = document.getElementById('users-list-content');
+  
+  modal.style.display = 'flex';
+  content.innerHTML = 'Inapakia...';
+
+  let query = supabase.from('profiles').select('*');
+  let labelText = '';
+
+  if (type === 'all_owners') {
+    query = query.eq('role', 'owner');
+    labelText = 'Wamiliki Wote';
+  } else if (type === 'pending') {
+    query = query.eq('role', 'owner').eq('is_approved', false);
+    labelText = 'Wanasubiri Uthibitisho';
+  } else if (type === 'approved') {
+    query = query.eq('role', 'owner').eq('is_approved', true);
+    labelText = 'Wamepitishwa';
+  } else if (type === 'cashiers') {
+    query = query.eq('role', 'cashier');
+    labelText = 'Wafanyakazi/Cashiers';
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
+
+  if (error || !data || data.length === 0) {
+    content.innerHTML = '<p class="empty-state">Hakuna watumiaji wa aina hii.</p>';
+    return;
+  }
+
+  title.textContent = labelText;
+  content.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Jina</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Hali</th>
+            <th>Tarehe</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.map(u => `
+            <tr>
+              <td>${u.full_name || '-'}</td>
+              <td>${u.email || '-'}</td>
+              <td>${u.role || '-'}</td>
+              <td>${u.is_approved ? '<span class="badge badge-success">Imepitishwa</span>' : '<span class="badge badge-warning">Inasubiri</span>'}</td>
+              <td>${new Date(u.created_at).toLocaleDateString('sw-TZ')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+};
+
+window.closeUsersModal = () => {
+  document.getElementById('users-modal').style.display = 'none';
+};
 
 window.approveOwner = async (ownerId, approve) => {
   if (!confirm(`Je, una uhakika unataka ${approve ? 'kupitisha' : 'kukataa'} akaunti hii?`)) return;
