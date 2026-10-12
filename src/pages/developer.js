@@ -2,39 +2,45 @@ import { supabase } from '../lib/supabase.js';
 
 const DEVELOPER_EMAIL = 'mussaelly1235@gmail.com';
 
+// SVG Icons
+const icons = {
+  owners: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+  pending: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  approved: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,
+  cashiers: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`
+};
+
 export async function renderDeveloper(root, user, profile) {
   if (user.email !== DEVELOPER_EMAIL) {
     root.innerHTML = `<div class="notice error"><h3>Hauruhusiwi</h3></div>`;
     return;
   }
 
-  // Muonekano wa Developer Dashboard
   root.innerHTML = `
     <div class="developer-container">
-      <div class="page-header"><h1>Developer Dashboard</h1></div>
+      <div class="page-header"><h1>Developer Dashboard</h1><p class="text-muted">Takwimu za jumla za mfumo</p></div>
 
       <div class="stats-grid">
         <div class="stat-card" style="cursor: pointer;" onclick="showUsersList('all_owners')">
-          <div class="stat-icon" style="background: #dbeafe; color: #1e40af;">👥</div>
+          <div class="stat-icon" style="background: #dbeafe; color: #1e40af;">${icons.owners}</div>
           <div class="stat-content"><p class="stat-label">Jumla ya Owners</p><h3 class="stat-value" id="total-owners">0</h3></div>
         </div>
         <div class="stat-card" style="cursor: pointer;" onclick="showUsersList('pending')">
-          <div class="stat-icon" style="background: #fef3c7; color: #92400e;">⏳</div>
+          <div class="stat-icon" style="background: #fef3c7; color: #92400e;">${icons.pending}</div>
           <div class="stat-content"><p class="stat-label">Wanasubiri Uthibitisho</p><h3 class="stat-value" id="pending-count">0</h3></div>
         </div>
         <div class="stat-card" style="cursor: pointer;" onclick="showUsersList('approved')">
-          <div class="stat-icon" style="background: #dcfce7; color: #166534;">✅</div>
+          <div class="stat-icon" style="background: #dcfce7; color: #166534;">${icons.approved}</div>
           <div class="stat-content"><p class="stat-label">Wamepitishwa (Active)</p><h3 class="stat-value" id="approved-count">0</h3></div>
         </div>
         <div class="stat-card" style="cursor: pointer;" onclick="showUsersList('cashiers')">
-          <div class="stat-icon" style="background: #fce7f3; color: #9d174d;">👤</div>
+          <div class="stat-icon" style="background: #fce7f3; color: #9d174d;">${icons.cashiers}</div>
           <div class="stat-content"><p class="stat-label">Jumla ya Cashiers</p><h3 class="stat-value" id="total-cashiers">0</h3></div>
         </div>
       </div>
 
-      <!-- Modal ya Orodha -->
       <div id="users-modal" class="modal-overlay" style="display: none;">
-        <div class="modal" style="max-width: 800px;">
+        <div class="modal" style="max-width: 900px;">
           <div class="modal-header">
             <h3 id="modal-title">Orodha ya Watumiaji</h3>
             <button class="modal-close" onclick="closeUsersModal()">×</button>
@@ -46,22 +52,21 @@ export async function renderDeveloper(root, user, profile) {
       <div class="section-title" style="margin-top: 32px;"><h2>Ombi Mpya za Owners (Zinasubiri Uthibitisho)</h2></div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Jina</th><th>Role</th><th>Hali</th><th>Tarehe</th><th>Vitendo</th></tr></thead>
-          <tbody id="pending-body"><tr><td colspan="5" class="empty-state">Inapakia...</td></tr></tbody>
+          <thead><tr><th>Jina</th><th>Email</th><th>Simu</th><th>Jina la Duka</th><th>Eneo</th><th>Tarehe</th><th>Vitendo</th></tr></thead>
+          <tbody id="pending-body"><tr><td colspan="7" class="empty-state">Inapakia...</td></tr></tbody>
         </table>
       </div>
 
       <div class="section-title" style="margin-top: 32px;"><h2>Owners Waliopitishwa</h2></div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Jina</th><th>Role</th><th>Hali</th><th>Tarehe</th><th>Vitendo</th></tr></thead>
-          <tbody id="approved-body"><tr><td colspan="5" class="empty-state">Inapakia...</td></tr></tbody>
+          <thead><tr><th>Jina</th><th>Email</th><th>Simu</th><th>Jina la Duka</th><th>Hali</th><th>Vitendo</th></tr></thead>
+          <tbody id="approved-body"><tr><td colspan="6" class="empty-state">Inapakia...</td></tr></tbody>
         </table>
       </div>
     </div>
   `;
 
-  // Pakia data zote
   await loadAllData();
 }
 
@@ -72,7 +77,6 @@ async function loadAllData() {
 }
 
 async function loadStats() {
-  // Tunatumia id tu kwa speed
   const { data: owners } = await supabase.from('profiles').select('id').eq('role', 'owner');
   const { data: pending } = await supabase.from('profiles').select('id').eq('role', 'owner').eq('is_approved', false);
   const { data: approved } = await supabase.from('profiles').select('id').eq('role', 'owner').eq('is_approved', true);
@@ -85,10 +89,9 @@ async function loadStats() {
 }
 
 async function loadPending() {
-  // TUNATUMIA COLUMNS MAALUM (Hii ndiyo siri ya kuzuia kuganda)
-  const { data, error } = await supabase
+  const { data: profiles, error } = await supabase
     .from('profiles')
-    .select('id, full_name, role, is_approved, active, created_at')
+    .select('id, full_name, email, phone, role, is_approved, active, created_at')
     .eq('role', 'owner')
     .eq('is_approved', false)
     .order('created_at', { ascending: false });
@@ -97,20 +100,28 @@ async function loadPending() {
   
   if (error) {
     console.error('Pending Error:', error);
-    tbody.innerHTML = `<tr><td colspan="5" style="color:red;">Hitilafu: ${error.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="color:red;">Hitilafu: ${error.message}</td></tr>`;
     return;
   }
 
-  if (!data || data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Hakuna ombi mpya (Wote wamepitishwa)</td></tr>';
+  if (!profiles || profiles.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Hakuna ombi mpya</td></tr>';
     return;
   }
 
-  tbody.innerHTML = data.map(p => `
+  // Get business settings for each profile
+  const pendingWithData = await Promise.all(profiles.map(async (p) => {
+    const { data: bs } = await supabase.from('business_settings').select('business_name, business_address').eq('owner_id', p.id).single();
+    return { ...p, business_name: bs?.business_name || '-', business_address: bs?.business_address || '-' };
+  }));
+
+  tbody.innerHTML = pendingWithData.map(p => `
     <tr>
       <td><strong>${p.full_name || 'Hakuna Jina'}</strong></td>
-      <td>${p.role}</td>
-      <td><span class="badge badge-warning">Inasubiri</span></td>
+      <td>${p.email || '-'}</td>
+      <td>${p.phone || '-'}</td>
+      <td>${p.business_name}</td>
+      <td>${p.business_address}</td>
       <td>${new Date(p.created_at).toLocaleDateString('sw-TZ')}</td>
       <td style="display: flex; gap: 5px;">
         <button class="btn btn-sm btn-success" onclick="approveOwner('${p.id}', true)">Pitisha</button>
@@ -121,9 +132,9 @@ async function loadPending() {
 }
 
 async function loadApproved() {
-  const { data, error } = await supabase
+  const { data: profiles, error } = await supabase
     .from('profiles')
-    .select('id, full_name, role, is_approved, active, created_at')
+    .select('id, full_name, email, phone, role, is_approved, active, created_at')
     .eq('role', 'owner')
     .eq('is_approved', true)
     .order('created_at', { ascending: false });
@@ -132,23 +143,29 @@ async function loadApproved() {
   
   if (error) {
     console.error('Approved Error:', error);
-    tbody.innerHTML = `<tr><td colspan="5" style="color:red;">Hitilafu: ${error.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="color:red;">Hitilafu: ${error.message}</td></tr>`;
     return;
   }
 
-  if (!data || data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Hakuna owners waliopitishwa</td></tr>';
+  if (!profiles || profiles.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Hakuna owners waliopitishwa</td></tr>';
     return;
   }
 
-  tbody.innerHTML = data.map(p => `
+  const approvedWithData = await Promise.all(profiles.map(async (p) => {
+    const { data: bs } = await supabase.from('business_settings').select('business_name, business_address').eq('owner_id', p.id).single();
+    return { ...p, business_name: bs?.business_name || '-', business_address: bs?.business_address || '-' };
+  }));
+
+  tbody.innerHTML = approvedWithData.map(p => `
     <tr>
       <td><strong>${p.full_name || 'Hakuna Jina'}</strong></td>
-      <td>${p.role}</td>
+      <td>${p.email || '-'}</td>
+      <td>${p.phone || '-'}</td>
+      <td>${p.business_name}</td>
       <td>${p.active ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Inactive</span>'}</td>
-      <td>${new Date(p.created_at).toLocaleDateString('sw-TZ')}</td>
       <td style="display: flex; gap: 5px;">
-        <button class="btn btn-sm btn-danger" onclick="toggleOwner('${p.id}', ${!p.active})">
+        <button class="btn btn-sm ${p.active ? 'btn-warning' : 'btn-success'}" onclick="toggleOwner('${p.id}', ${!p.active})">
           ${p.active ? 'Funga' : 'Fungua'}
         </button>
         <button class="btn btn-sm btn-danger" onclick="deleteUser('${p.id}')">Futa</button>
@@ -157,7 +174,6 @@ async function loadApproved() {
   `).join('');
 }
 
-// Function za Modal na Vitendo
 window.showUsersList = async (type) => {
   const modal = document.getElementById('users-modal');
   const title = document.getElementById('modal-title');
@@ -165,7 +181,7 @@ window.showUsersList = async (type) => {
   modal.style.display = 'flex';
   content.innerHTML = 'Inapakia...';
 
-  let query = supabase.from('profiles').select('id, full_name, role, is_approved, active, created_at');
+  let query = supabase.from('profiles').select('id, full_name, email, phone, role, is_approved, active, created_at');
   let label = '';
 
   if (type === 'all_owners') { query = query.eq('role', 'owner'); label = 'Wamiliki Wote'; }
@@ -184,14 +200,15 @@ window.showUsersList = async (type) => {
   content.innerHTML = `
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Jina</th><th>Role</th><th>Hali</th><th>Tarehe</th><th>Vitendo</th></tr></thead>
+        <thead><tr><th>Jina</th><th>Email</th><th>Simu</th><th>Role</th><th>Hali</th><th>Vitendo</th></tr></thead>
         <tbody>
           ${data.map(u => `
             <tr>
               <td>${u.full_name || '-'}</td>
+              <td>${u.email || '-'}</td>
+              <td>${u.phone || '-'}</td>
               <td>${u.role}</td>
-              <td>${u.is_approved ? '✅' : '⏳'}</td>
-              <td>${new Date(u.created_at).toLocaleDateString('sw-TZ')}</td>
+              <td>${u.is_approved ? '<span class="badge badge-success">Imepitishwa</span>' : '<span class="badge badge-warning">Inasubiri</span>'}</td>
               <td><button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}')">Futa</button></td>
             </tr>
           `).join('')}
@@ -204,11 +221,9 @@ window.showUsersList = async (type) => {
 window.closeUsersModal = () => { document.getElementById('users-modal').style.display = 'none'; };
 
 window.deleteUser = async (userId) => {
-  if (!confirm('Futa akaunti hii kabisa?')) return;
-  // Futa data zinazohusiana kwanza
+  if (!confirm('TAHADHARI: Futa akaunti hii KABISA?')) return;
   await supabase.from('business_settings').delete().eq('owner_id', userId);
   await supabase.from('products').delete().eq('owner_id', userId);
-  // Futa profile
   const { error } = await supabase.from('profiles').delete().eq('id', userId);
   if (error) { alert('Hitilafu: ' + error.message); return; }
   alert('Imefutwa!');
