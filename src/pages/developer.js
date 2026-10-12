@@ -82,9 +82,9 @@ export async function renderDeveloper(root, user, profile) {
         </div>
       </div>
 
-      <!-- Modal ya kuonyesha orodha ya users -->
+      <!-- Modal ya kuonyesha orodha ya users na kitufe cha kufuta -->
       <div id="users-modal" class="modal-overlay" style="display: none;">
-        <div class="modal" style="max-width: 800px;">
+        <div class="modal" style="max-width: 900px;">
           <div class="modal-header">
             <h3 id="modal-title">Orodha ya Watumiaji</h3>
             <button class="modal-close" onclick="closeUsersModal()">×</button>
@@ -149,30 +149,20 @@ export async function renderDeveloper(root, user, profile) {
 }
 
 async function loadSystemStats() {
-  // Total owners (approved + pending)
-  const { count: totalOwners } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'owner');
-  
-  // Pending owners
-  const { count: pendingCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'owner').eq('is_approved', false);
-  
-  // Approved owners
-  const { count: approvedCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'owner').eq('is_approved', true).eq('active', true);
-  
-  // Total cashiers
-  const { count: totalCashiers } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'cashier');
-  
-  // Total products (across all businesses)
-  const { count: totalProducts } = await supabase.from('products').select('*', { count: 'exact', head: true });
-  
-  // Total sales
-  const { count: totalSales } = await supabase.from('sales').select('*', { count: 'exact', head: true });
+  // Tunatumia .select().then(data => data.length) badala ya count: 'exact' ili kuepuka matatizo ya RLS
+  const { data: owners } = await supabase.from('profiles').select('id').eq('role', 'owner');
+  const { data: pending } = await supabase.from('profiles').select('id').eq('role', 'owner').eq('is_approved', false);
+  const { data: approved } = await supabase.from('profiles').select('id').eq('role', 'owner').eq('is_approved', true).eq('active', true);
+  const { data: cashiers } = await supabase.from('profiles').select('id').eq('role', 'cashier');
+  const { data: products } = await supabase.from('products').select('id');
+  const { data: sales } = await supabase.from('sales').select('id');
 
-  document.getElementById('total-owners').textContent = totalOwners || 0;
-  document.getElementById('pending-count').textContent = pendingCount || 0;
-  document.getElementById('approved-count').textContent = approvedCount || 0;
-  document.getElementById('total-cashiers').textContent = totalCashiers || 0;
-  document.getElementById('total-products').textContent = totalProducts || 0;
-  document.getElementById('total-sales').textContent = totalSales || 0;
+  document.getElementById('total-owners').textContent = owners ? owners.length : 0;
+  document.getElementById('pending-count').textContent = pending ? pending.length : 0;
+  document.getElementById('approved-count').textContent = approved ? approved.length : 0;
+  document.getElementById('total-cashiers').textContent = cashiers ? cashiers.length : 0;
+  document.getElementById('total-products').textContent = products ? products.length : 0;
+  document.getElementById('total-sales').textContent = sales ? sales.length : 0;
 }
 
 async function loadPendingOwners() {
@@ -183,13 +173,9 @@ async function loadPendingOwners() {
     .eq('is_approved', false)
     .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('Error loading pending:', error);
-    return;
-  }
+  if (error) { console.error('Error loading pending:', error); return; }
 
   const tbody = document.getElementById('pending-body');
-  
   if (!pending || pending.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Hakuna ombi mpya</td></tr>';
     return;
@@ -203,9 +189,9 @@ async function loadPendingOwners() {
       <td>${p.business_settings?.business_name || '-'}</td>
       <td>${p.business_settings?.business_address || '-'}</td>
       <td>${new Date(p.created_at).toLocaleDateString('sw-TZ')}</td>
-      <td>
+      <td style="display: flex; gap: 5px;">
         <button class="btn btn-sm btn-success" onclick="approveOwner('${p.id}', true)">Pitisha</button>
-        <button class="btn btn-sm btn-danger" onclick="approveOwner('${p.id}', false)">Kataa</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteUser('${p.id}')">Futa</button>
       </td>
     </tr>
   `).join('');
@@ -219,23 +205,18 @@ async function loadApprovedOwners() {
     .eq('is_approved', true)
     .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('Error loading approved:', error);
-    return;
-  }
+  if (error) { console.error('Error loading approved:', error); return; }
 
   const tbody = document.getElementById('approved-body');
-  
   if (!approved || approved.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Hakuna owners waliopitishwa</td></tr>';
     return;
   }
 
-  // Get cashier and product counts for each owner
   const approvedWithCounts = await Promise.all(approved.map(async (owner) => {
-    const { count: cashierCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('owner_id', owner.id);
-    const { count: productCount } = await supabase.from('products').select('*', { count: 'exact', head: true }).eq('owner_id', owner.id);
-    return { ...owner, cashier_count: cashierCount || 0, product_count: productCount || 0 };
+    const { data: c } = await supabase.from('profiles').select('id').eq('owner_id', owner.id);
+    const { data: p } = await supabase.from('products').select('id').eq('owner_id', owner.id);
+    return { ...owner, cashier_count: c ? c.length : 0, product_count: p ? p.length : 0 };
   }));
 
   tbody.innerHTML = approvedWithCounts.map(p => `
@@ -246,23 +227,24 @@ async function loadApprovedOwners() {
       <td>${p.cashier_count} wafanyakazi</td>
       <td>${p.product_count} bidhaa</td>
       <td>${p.active ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Inactive</span>'}</td>
-      <td>
-        <button class="btn btn-sm ${p.active ? 'btn-danger' : 'btn-success'}" onclick="toggleOwner('${p.id}', ${!p.active})">
+      <td style="display: flex; gap: 5px;">
+        <button class="btn btn-sm ${p.active ? 'btn-warning' : 'btn-success'}" onclick="toggleOwner('${p.id}', ${!p.active})">
           ${p.active ? 'Funga' : 'Fungua'}
         </button>
+        <button class="btn btn-sm btn-danger" onclick="deleteUser('${p.id}')">Futa</button>
       </td>
     </tr>
   `).join('');
 }
 
-// Function to show users list in modal
+// Function to show users list in modal (with Delete button)
 window.showUsersList = async (type) => {
   const modal = document.getElementById('users-modal');
   const title = document.getElementById('modal-title');
   const content = document.getElementById('users-list-content');
   
   modal.style.display = 'flex';
-  content.innerHTML = 'Inapakia...';
+  content.innerHTML = '<p class="muted">Inapakia...</p>';
 
   let query = supabase.from('profiles').select('*');
   let labelText = '';
@@ -278,7 +260,7 @@ window.showUsersList = async (type) => {
     labelText = 'Wamepitishwa';
   } else if (type === 'cashiers') {
     query = query.eq('role', 'cashier');
-    labelText = 'Wafanyakazi/Cashiers';
+    labelText = 'Wafanyakazi / Cashiers';
   }
 
   const { data, error } = await query.order('created_at', { ascending: false });
@@ -288,7 +270,7 @@ window.showUsersList = async (type) => {
     return;
   }
 
-  title.textContent = labelText;
+  title.textContent = `${labelText} (${data.length})`;
   content.innerHTML = `
     <div class="table-wrap">
       <table>
@@ -299,6 +281,7 @@ window.showUsersList = async (type) => {
             <th>Role</th>
             <th>Hali</th>
             <th>Tarehe</th>
+            <th>Vitendo</th>
           </tr>
         </thead>
         <tbody>
@@ -309,6 +292,9 @@ window.showUsersList = async (type) => {
               <td>${u.role || '-'}</td>
               <td>${u.is_approved ? '<span class="badge badge-success">Imepitishwa</span>' : '<span class="badge badge-warning">Inasubiri</span>'}</td>
               <td>${new Date(u.created_at).toLocaleDateString('sw-TZ')}</td>
+              <td>
+                <button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}')">Futa Kabisa</button>
+              </td>
             </tr>
           `).join('')}
         </tbody>
@@ -321,6 +307,39 @@ window.closeUsersModal = () => {
   document.getElementById('users-modal').style.display = 'none';
 };
 
+// =========================================================
+// FUNCTION MPYA YA KUFUTA MTUMIAJI (OWNER / CASHIER)
+// =========================================================
+window.deleteUser = async (userId) => {
+  if (!confirm('TAHADHARI: Una uhakika unataka kufuta akaunti hii KABISA? Data zake zote (profiles, business settings) zitaondolewa na hatua hii haiwezi kurudishwa.')) {
+    return;
+  }
+
+  try {
+    // 1. Futa business settings zake
+    await supabase.from('business_settings').delete().eq('owner_id', userId);
+    
+    // 2. Futa bidhaa zake (kama zipo)
+    await supabase.from('products').delete().eq('owner_id', userId);
+    
+    // 3. Futa profile yake (Hii ndiyo inamfuta kwenye mfumo)
+    const { error } = await supabase.from('profiles').delete().eq('id', userId);
+    
+    if (error) {
+      alert('Hitilafu: ' + error.message);
+    } else {
+      alert('Akaunti imefutwa kwa mafanikio!');
+      // Refresh data zote ili namba zibadilike mara moja
+      await loadSystemStats();
+      await loadPendingOwners();
+      await loadApprovedOwners();
+      closeUsersModal(); // Funga modal kama imefunguka
+    }
+  } catch (err) {
+    alert('Hitilafu isiyojulikana: ' + err.message);
+  }
+};
+
 window.approveOwner = async (ownerId, approve) => {
   if (!confirm(`Je, una uhakika unataka ${approve ? 'kupitisha' : 'kukataa'} akaunti hii?`)) return;
 
@@ -331,9 +350,9 @@ window.approveOwner = async (ownerId, approve) => {
     await supabase.from('business_settings').delete().eq('owner_id', ownerId);
   }
 
-  loadSystemStats();
-  loadPendingOwners();
-  loadApprovedOwners();
+  await loadSystemStats();
+  await loadPendingOwners();
+  await loadApprovedOwners();
 };
 
 window.toggleOwner = async (ownerId, newStatus) => {
@@ -342,5 +361,5 @@ window.toggleOwner = async (ownerId, newStatus) => {
   const { error } = await supabase.from('profiles').update({ active: newStatus }).eq('id', ownerId);
   if (error) { alert('Hitilafu: ' + error.message); return; }
 
-  loadApprovedOwners();
+  await loadApprovedOwners();
 };
