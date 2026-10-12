@@ -1,10 +1,8 @@
 import { supabase } from '../lib/supabase.js';
 
-// Email yako ya developer - BADILISHA hii iwe email yako halisi
 const DEVELOPER_EMAIL = 'mussaelly1235@gmail.com';
 
 export async function renderDeveloper(root, user, profile) {
-  // Check if current user is the developer
   if (user.email !== DEVELOPER_EMAIL) {
     root.innerHTML = `
       <div class="notice error">
@@ -19,9 +17,20 @@ export async function renderDeveloper(root, user, profile) {
     <div class="developer-container">
       <div class="page-header">
         <h1>Developer Dashboard</h1>
+        <p class="text-muted">Takwimu za jumla za mfumo wa StationeryPro</p>
       </div>
 
       <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon" style="background: #dbeafe; color: #1e40af;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <div class="stat-content">
+            <p class="stat-label">Jumla ya Owners</p>
+            <h3 class="stat-value" id="total-owners">0</h3>
+          </div>
+        </div>
+        
         <div class="stat-card">
           <div class="stat-icon" style="background: #fef3c7; color: #92400e;">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -31,19 +40,50 @@ export async function renderDeveloper(root, user, profile) {
             <h3 class="stat-value" id="pending-count">0</h3>
           </div>
         </div>
+        
         <div class="stat-card">
           <div class="stat-icon" style="background: #dcfce7; color: #166534;">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
           </div>
           <div class="stat-content">
-            <p class="stat-label">Wamepitishwa</p>
+            <p class="stat-label">Wamepitishwa (Active)</p>
             <h3 class="stat-value" id="approved-count">0</h3>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background: #fce7f3; color: #9d174d;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <div class="stat-content">
+            <p class="stat-label">Jumla ya Cashiers</p>
+            <h3 class="stat-value" id="total-cashiers">0</h3>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background: #f3e8ff; color: #7c3aed;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+          </div>
+          <div class="stat-content">
+            <p class="stat-label">Jumla ya Bidhaa</p>
+            <h3 class="stat-value" id="total-products">0</h3>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background: #fee2e2; color: #991b1b;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+          </div>
+          <div class="stat-content">
+            <p class="stat-label">Jumla ya Mauzo</p>
+            <h3 class="stat-value" id="total-sales">0</h3>
           </div>
         </div>
       </div>
 
       <div class="section-title">
-        <h2>Ombi Mpya za Owners</h2>
+        <h2>Ombi Mpya za Owners (Zinasubiri Uthibitisho)</h2>
       </div>
 
       <div class="table-wrap">
@@ -76,30 +116,56 @@ export async function renderDeveloper(root, user, profile) {
               <th>Jina</th>
               <th>Email</th>
               <th>Jina la Duka</th>
-              <th>Cashiers</th>
+              <th>Wafanyakazi</th>
+              <th>Bidhaa</th>
               <th>Hali</th>
               <th>Vitendo</th>
             </tr>
           </thead>
           <tbody id="approved-body">
-            <tr><td colspan="6" class="empty-state">Inapakia...</td></tr>
+            <tr><td colspan="7" class="empty-state">Inapakia...</td></tr>
           </tbody>
         </table>
       </div>
     </div>
   `;
 
+  await loadSystemStats();
   await loadPendingOwners();
   await loadApprovedOwners();
+}
+
+async function loadSystemStats() {
+  // Total owners (approved + pending)
+  const { count: totalOwners } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'owner');
+  
+  // Pending owners
+  const { count: pendingCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'owner').eq('is_approved', false);
+  
+  // Approved owners
+  const { count: approvedCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'owner').eq('is_approved', true).eq('active', true);
+  
+  // Total cashiers
+  const { count: totalCashiers } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'cashier');
+  
+  // Total products (across all businesses)
+  const { count: totalProducts } = await supabase.from('products').select('*', { count: 'exact', head: true });
+  
+  // Total sales
+  const { count: totalSales } = await supabase.from('sales').select('*', { count: 'exact', head: true });
+
+  document.getElementById('total-owners').textContent = totalOwners || 0;
+  document.getElementById('pending-count').textContent = pendingCount || 0;
+  document.getElementById('approved-count').textContent = approvedCount || 0;
+  document.getElementById('total-cashiers').textContent = totalCashiers || 0;
+  document.getElementById('total-products').textContent = totalProducts || 0;
+  document.getElementById('total-sales').textContent = totalSales || 0;
 }
 
 async function loadPendingOwners() {
   const { data: pending, error } = await supabase
     .from('profiles')
-    .select(`
-      *,
-      business_settings!inner(business_name, business_address)
-    `)
+    .select(`*, business_settings(business_name, business_address)`)
     .eq('role', 'owner')
     .eq('is_approved', false)
     .order('created_at', { ascending: false });
@@ -110,8 +176,7 @@ async function loadPendingOwners() {
   }
 
   const tbody = document.getElementById('pending-body');
-  document.getElementById('pending-count').textContent = pending?.length || 0;
-
+  
   if (!pending || pending.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Hakuna ombi mpya</td></tr>';
     return;
@@ -136,11 +201,7 @@ async function loadPendingOwners() {
 async function loadApprovedOwners() {
   const { data: approved, error } = await supabase
     .from('profiles')
-    .select(`
-      *,
-      business_settings!inner(business_name),
-      cashiers:profiles(owner_id)
-    `)
+    .select(`*, business_settings(business_name)`)
     .eq('role', 'owner')
     .eq('is_approved', true)
     .order('created_at', { ascending: false });
@@ -151,19 +212,26 @@ async function loadApprovedOwners() {
   }
 
   const tbody = document.getElementById('approved-body');
-  document.getElementById('approved-count').textContent = approved?.length || 0;
-
+  
   if (!approved || approved.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Hakuna owners waliopitishwa</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Hakuna owners waliopitishwa</td></tr>';
     return;
   }
 
-  tbody.innerHTML = approved.map(p => `
+  // Get cashier and product counts for each owner
+  const approvedWithCounts = await Promise.all(approved.map(async (owner) => {
+    const { count: cashierCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('owner_id', owner.id);
+    const { count: productCount } = await supabase.from('products').select('*', { count: 'exact', head: true }).eq('owner_id', owner.id); // Kama products ina owner_id
+    return { ...owner, cashier_count: cashierCount || 0, product_count: productCount || 0 };
+  }));
+
+  tbody.innerHTML = approvedWithCounts.map(p => `
     <tr>
       <td><strong>${p.full_name || '-'}</strong></td>
       <td>${p.email || '-'}</td>
       <td>${p.business_settings?.business_name || '-'}</td>
-      <td>${p.cashiers?.length || 0} wafanyakazi</td>
+      <td>${p.cashier_count} wafanyakazi</td>
+      <td>${p.product_count} bidhaa</td>
       <td>${p.active ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Inactive</span>'}</td>
       <td>
         <button class="btn btn-sm ${p.active ? 'btn-danger' : 'btn-success'}" 
@@ -176,44 +244,25 @@ async function loadApprovedOwners() {
 }
 
 window.approveOwner = async (ownerId, approve) => {
-  const action = approve ? 'kupitisha' : 'kukataa';
-  if (!confirm(`Je, una uhakika unataka ${action} akaunti hii?`)) return;
+  if (!confirm(`Je, una uhakika unataka ${approve ? 'kupitisha' : 'kukataa'} akaunti hii?`)) return;
 
-  const { error } = await supabase
-    .from('profiles')
-    .update({ 
-      is_approved: approve,
-      active: approve  // active=true if approved
-    })
-    .eq('id', ownerId);
+  const { error } = await supabase.from('profiles').update({ is_approved: approve, active: approve }).eq('id', ownerId);
+  if (error) { alert('Hitilafu: ' + error.message); return; }
 
-  if (error) {
-    alert('Hitilafu: ' + error.message);
-    return;
-  }
-
-  // If rejected, delete their business settings
   if (!approve) {
     await supabase.from('business_settings').delete().eq('owner_id', ownerId);
   }
 
+  loadSystemStats();
   loadPendingOwners();
   loadApprovedOwners();
 };
 
 window.toggleOwner = async (ownerId, newStatus) => {
-  const action = newStatus ? 'kumfungulia' : 'kumfungia';
-  if (!confirm(`Je, una uhakika unataka ${action} owner huyu?`)) return;
+  if (!confirm(`Je, una uhakika unataka ${newStatus ? 'kumfungulia' : 'kumfungia'} owner huyu?`)) return;
 
-  const { error } = await supabase
-    .from('profiles')
-    .update({ active: newStatus })
-    .eq('id', ownerId);
-
-  if (error) {
-    alert('Hitilafu: ' + error.message);
-    return;
-  }
+  const { error } = await supabase.from('profiles').update({ active: newStatus }).eq('id', ownerId);
+  if (error) { alert('Hitilafu: ' + error.message); return; }
 
   loadApprovedOwners();
 };

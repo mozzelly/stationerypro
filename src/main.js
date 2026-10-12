@@ -11,15 +11,12 @@ import { renderReports } from "./pages/reports.js";
 import { renderUsers } from "./pages/users.js";
 import { renderNotifications } from "./pages/notifications.js";
 import { renderSettings } from "./pages/settings.js";
-import { renderDeveloper } from "./pages/developer.js"; // <-- Mpya: Developer Page
+import { renderDeveloper } from "./pages/developer.js";
 import "./styles/style.css";
 
 const root = document.querySelector("#app");
-
-// Email yako ya Developer (Badilisha hapa kama inahitajika)
 const DEVELOPER_EMAIL = "mussaelly1235@gmail.com";
 
-// SVG Icons inline
 const icons = {
   dashboard: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>`,
   products: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>`,
@@ -31,12 +28,11 @@ const icons = {
   users: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
   notifications: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>`,
   settings: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`,
-  developer: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`, // <-- Mpya: Developer Icon
+  developer: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>`,
   logout: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>`,
   menu: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>`
 };
 
-// HAPA NDIO MAHALI PA const pages
 const pages = {
   dashboard: { title: "Dashboard", render: renderDashboard },
   products: { title: "Bidhaa na Stock", render: renderProducts },
@@ -48,7 +44,7 @@ const pages = {
   users: { title: "Watumiaji", render: renderUsers },
   notifications: { title: "Arifa", render: renderNotifications },
   settings: { title: "Settings", render: renderSettings },
-  developer: { title: "Developer", render: renderDeveloper } // <-- Mpya: Developer Page
+  developer: { title: "Developer", render: renderDeveloper }
 };
 
 function escapeHTML(value = "") {
@@ -129,31 +125,68 @@ async function start() {
     return;
   }
 
+  // =====================================================================
+  // BADILISHO LA KIUTALAMU: Picha ya Duka Moja (Owner -> Cashier)
+  // =====================================================================
+  if (!profile.avatar_url && (profile.role === 'cashier' || profile.role === 'employee') && profile.owner_id) {
+    const { data: ownerData } = await supabase
+      .from('profiles')
+      .select('avatar_url')
+      .eq('id', profile.owner_id)
+      .single();
+    
+    if (ownerData && ownerData.avatar_url) {
+      profile.avatar_url = ownerData.avatar_url;
+    }
+  }
+  // =====================================================================
+
   if (!profile || !profile.active) {
     await signOut();
     renderLogin(root);
     return;
   }
 
-  // LOGIC MPYA YA RUHUSA (PERMISSIONS)
   const isDeveloper = session.user.email === DEVELOPER_EMAIL;
   
+  // =========================================================
+  // LOGIC KAMILI YA RUHUSA (PERMISSIONS)
+  // =========================================================
   let allowedPages;
   if (isDeveloper) {
-    // Wewe Developer unaona hizi pekee
-    allowedPages = ["developer", "dashboard", "settings", "notifications"];
+    // Developer anaona Developer page tu + settings + notifications (HAKUNA Dashboard)
+    allowedPages = ["developer", "settings", "notifications"];
   } else if (profile.role === "owner") {
-    // Owner anaona pages zote za biashara (isipokuwa developer)
     allowedPages = ["dashboard", "products", "categories", "pos", "sales", "expenses", "reports", "users", "notifications", "settings"];
   } else {
-    // Cashier / Mfanyakazi anaona hizi pekee
-    allowedPages = ["pos", "sales", "expenses"];
+    allowedPages = ["pos", "sales", "expenses", "products"];
   }
 
   async function renderRoute() {
-    const requested = location.hash.replace("#", "") || "dashboard";
+    // Default route: Developer anaenda 'developer', wengine 'dashboard' au 'pos'
+    const defaultPage = isDeveloper ? "developer" : (profile.role === "owner" ? "dashboard" : "pos");
+    const requested = location.hash.replace("#", "") || defaultPage;
+    
     const route = allowedPages.includes(requested) ? requested : allowedPages[0];
     const page = pages[route];
+
+    // Tengeneza HTML ya avatar (Picha au Herufi ya kwanza)
+    const avatarHTML = profile.avatar_url 
+      ? `<img src="${profile.avatar_url}" alt="${escapeHTML(profile.full_name || 'User')}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />`
+      : escapeHTML((profile.full_name || "U").charAt(0).toUpperCase());
+
+    // =========================================================
+    // BADILISHO LA KIUTALAMU: Kuonyesha Jina la Role kwa Usahihi
+    // =========================================================
+    let displayRole = profile.role || "";
+    if (isDeveloper) {
+      displayRole = "Developer";
+    } else if (profile.role === "owner") {
+      displayRole = "Owner";
+    } else if (profile.role === "cashier" || profile.role === "employee") {
+      displayRole = "Cashier";
+    }
+    // =========================================================
 
     root.innerHTML = `
       <div class="app-layout">
@@ -167,10 +200,12 @@ async function start() {
           </div>
 
           <div class="user-mini">
-            <div class="avatar">${escapeHTML((profile.full_name || "U").charAt(0).toUpperCase())}</div>
+            <div class="avatar" style="width: 40px; height: 40px; border-radius: 50%; overflow: hidden; background: #e2e8f0; display: flex; align-items: center; justify-content: center;">
+              ${avatarHTML}
+            </div>
             <div>
               <strong>${escapeHTML(profile.full_name || session.user.email)}</strong>
-              <small>${escapeHTML(profile.role || "")}</small>
+              <small>${escapeHTML(displayRole)}</small>
             </div>
           </div>
 
@@ -199,7 +234,7 @@ async function start() {
               <h2>${page.title}</h2>
             </div>
             <div class="topbar-user">
-              ${escapeHTML(profile.role || "")}
+              ${escapeHTML(displayRole)}
             </div>
           </header>
 

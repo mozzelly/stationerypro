@@ -1,5 +1,32 @@
 import { supabase } from '../lib/supabase.js';
 
+// Orodha ya bidhaa za kawaida za Tanzania (Mfumo utazipendekeza tu, hazijaingia database mpaka ubofye Hifadhi)
+const commonProducts = [
+  { name: 'Kalamu ya Mshale (Blue)', category: 'Writing', cost: 200, selling: 500 },
+  { name: 'Kalamu ya Mshale (Black)', category: 'Writing', cost: 200, selling: 500 },
+  { name: 'Kalamu ya Mshale (Red)', category: 'Writing', cost: 200, selling: 500 },
+  { name: 'Kitabu cha Mazoezi A4 (80 pages)', category: 'Books', cost: 1500, selling: 3000 },
+  { name: 'Kitabu cha Mazoezi A5 (60 pages)', category: 'Books', cost: 1000, selling: 2000 },
+  { name: 'Daftari Kubwa (200 pages)', category: 'Books', cost: 3000, selling: 5000 },
+  { name: 'Daftari Dogo (100 pages)', category: 'Books', cost: 1500, selling: 3000 },
+  { name: 'Karatasi A4 (Ream 500)', category: 'Paper', cost: 8000, selling: 12000 },
+  { name: 'Futa (Eraser)', category: 'Accessories', cost: 200, selling: 500 },
+  { name: 'Kifutio (Sharpener)', category: 'Accessories', cost: 300, selling: 700 },
+  { name: 'Rula 30cm', category: 'Accessories', cost: 500, selling: 1000 },
+  { name: 'Penseli HB', category: 'Writing', cost: 200, selling: 500 },
+  { name: 'Kalamu ya Kudumu (Permanent Marker)', category: 'Writing', cost: 1000, selling: 2000 },
+  { name: 'Glue (Unga wa Kufuatia)', category: 'Accessories', cost: 500, selling: 1000 },
+  { name: 'Mkasi (Scissors)', category: 'Accessories', cost: 1000, selling: 2000 },
+  { name: 'Stapler (Kukutia)', category: 'Accessories', cost: 3000, selling: 5000 },
+  { name: 'Staples (Vikokotoo)', category: 'Accessories', cost: 500, selling: 1000 },
+  { name: 'File Folder (Manila)', category: 'Filing', cost: 300, selling: 700 },
+  { name: 'Bahasha (Envelope) F4', category: 'Paper', cost: 100, selling: 300 },
+  { name: 'Correction Fluid (Pen)', category: 'Accessories', cost: 1500, selling: 3000 },
+  { name: 'Highlighter (Yellow/Green/Pink)', category: 'Writing', cost: 800, selling: 1500 },
+  { name: 'Kikokotoo (Calculator) Small', category: 'Electronics', cost: 5000, selling: 10000 },
+  { name: 'Mfuko wa Penseli (Pencil Case)', category: 'Accessories', cost: 2000, selling: 4000 }
+];
+
 export async function renderProducts(root, user, profile) {
   root.innerHTML = `
     <div class="page-header">
@@ -42,19 +69,26 @@ export async function renderProducts(root, user, profile) {
         <div class="modal-body">
           <form id="product-form">
             <div class="form-grid">
-              <div class="form-group"><label>Jina la bidhaa *</label><input type="text" name="name" required /></div>
+              <!-- TUMIA DATALIST KWA AUTOCOMPLETE -->
+              <div class="form-group">
+                <label>Jina la bidhaa *</label>
+                <input type="text" name="name" id="product-name-input" list="common-products-list" required placeholder="Andika au chagua bidhaa..." />
+                <datalist id="common-products-list"></datalist>
+              </div>
+              
               <div class="form-group"><label>SKU / Barcode Namba</label><input type="text" name="sku" /></div>
-              <div class="form-group"><label>Kategoria</label><select name="category_id"><option value="">Chagua kategoria</option></select></div>
+              <div class="form-group"><label>Kategoria</label><select name="category_id" id="category-select"><option value="">Chagua kategoria</option></select></div>
               <div class="form-group"><label>Unit (kipimo)</label><input type="text" name="unit" value="piece" /></div>
               <div class="form-group"><label>Bei ya kununua (TSh) *</label><input type="number" name="cost_price" step="0.01" min="0" required /></div>
               <div class="form-group"><label>Bei ya kuuza (TSh) *</label><input type="number" name="selling_price" step="0.01" min="0" required /></div>
               <div class="form-group"><label>Stock ya Mwanzo *</label><input type="number" name="initial_stock" step="0.001" min="0" required /></div>
               <div class="form-group"><label>Stock ya Sasa</label><input type="number" name="stock_quantity" step="0.001" min="0" value="0" /></div>
               <div class="form-group"><label>Stock ya Kuagiza Tena (Alert)</label><input type="number" name="reorder_level" step="0.001" min="0" value="5" /></div>
+              
               <div class="form-group span-all">
                 <label>Picha ya Barcode (Hiari)</label>
                 <input type="file" id="barcode-input" name="barcode_image" accept="image/*" />
-                <small class="text-muted">Pakia picha ya barcode ikiwa nayo.</small>
+                <small class="text-muted">Pakia picha ya barcode ikiwa nayo (si lazima).</small>
                 <div id="barcode-preview" style="margin-top: 10px; max-width: 200px;"></div>
               </div>
             </div>
@@ -71,6 +105,7 @@ export async function renderProducts(root, user, profile) {
 
   await loadProducts();
   await loadCategories();
+  setupAutocomplete(); // Weka mapendekezo ya bidhaa
 
   document.getElementById('add-product-btn').addEventListener('click', () => openModal());
   document.getElementById('close-modal').addEventListener('click', () => closeModal());
@@ -87,6 +122,32 @@ export async function renderProducts(root, user, profile) {
       reader.onload = function(e) { preview.innerHTML = `<img src="${e.target.result}" style="max-width: 100%; border: 1px solid var(--border); border-radius: 4px;" />`; }
       reader.readAsDataURL(file);
     } else { preview.innerHTML = ''; }
+  });
+}
+
+// Function ya kuweka mapendekezo na kujaza bei kiotomatiki
+function setupAutocomplete() {
+  const datalist = document.getElementById('common-products-list');
+  datalist.innerHTML = commonProducts.map(p => `<option value="${p.name}">`).join('');
+
+  const nameInput = document.getElementById('product-name-input');
+  const categorySelect = document.getElementById('category-select');
+  const costInput = document.querySelector('input[name="cost_price"]');
+  const sellingInput = document.querySelector('input[name="selling_price"]');
+
+  nameInput.addEventListener('input', function() {
+    const selectedName = this.value;
+    const product = commonProducts.find(p => p.name === selectedName);
+    
+    if (product) {
+      // Ikiwa bidhaa imepatikana kwenye orodha, jaza kategoria na bei (lakini mtu anaweza kubadilisha)
+      // Tafuta category ID inayolingana na jina la category
+      const catOption = Array.from(categorySelect.options).find(opt => opt.text.toLowerCase() === product.category.toLowerCase());
+      if (catOption) categorySelect.value = catOption.value;
+      
+      costInput.value = product.cost;
+      sellingInput.value = product.selling;
+    }
   });
 }
 
@@ -169,19 +230,33 @@ async function saveProduct() {
   const productId = form.dataset.productId;
   const barcodeFile = form.barcode_image.files[0];
 
+  // Ulinzi wa ziada: trim() inaondoa nafasi zisizohitajika, na kubadilisha string tupu kuwa null
   const baseData = {
-    name: form.name.value, sku: form.sku.value || null, category_id: form.category_id.value || null,
-    unit: form.unit.value || 'piece', cost_price: parseFloat(form.cost_price.value), selling_price: parseFloat(form.selling_price.value),
-    initial_stock: parseFloat(form.initial_stock.value) || 0, stock_quantity: parseFloat(form.stock_quantity.value) || 0,
+    name: form.name.value.trim(), 
+    sku: form.sku.value.trim() === '' ? null : form.sku.value.trim(), 
+    category_id: form.category_id.value === '' ? null : form.category_id.value,
+    unit: form.unit.value.trim() || 'piece', 
+    cost_price: parseFloat(form.cost_price.value) || 0, 
+    selling_price: parseFloat(form.selling_price.value) || 0,
+    initial_stock: parseFloat(form.initial_stock.value) || 0, 
+    stock_quantity: parseFloat(form.stock_quantity.value) || 0,
     reorder_level: parseFloat(form.reorder_level.value) || 5
   };
 
   const executeSave = async (barcodeDataUrl) => {
     const finalData = { ...baseData, barcode_image: barcodeDataUrl };
     const result = productId ? await supabase.from('products').update(finalData).eq('id', productId) : await supabase.from('products').insert([finalData]);
-    if (result.error) { message.textContent = result.error.message; message.className = 'form-message error'; message.style.display = 'block'; return; }
+    
+    if (result.error) { 
+      message.textContent = result.error.message; 
+      message.className = 'form-message error'; 
+      message.style.display = 'block'; 
+      return; 
+    }
+    
     message.textContent = productId ? 'Bidhaa imesasishwa!' : 'Bidhaa imeongezwa!';
-    message.className = 'form-message success'; message.style.display = 'block';
+    message.className = 'form-message success'; 
+    message.style.display = 'block';
     setTimeout(() => { closeModal(); loadProducts(); }, 1500);
   };
 
@@ -193,7 +268,9 @@ async function saveProduct() {
     if (productId) {
       const { data } = await supabase.from('products').select('barcode_image').eq('id', productId).single();
       executeSave(data?.barcode_image || null);
-    } else { executeSave(null); }
+    } else { 
+      executeSave(null); 
+    }
   }
 }
 

@@ -1,242 +1,173 @@
 import { supabase } from '../lib/supabase.js';
 
+const DEVELOPER_EMAIL = 'mussaelly1235@gmail.com';
+
 export async function renderSettings(root, user, profile) {
-  if (profile.role !== 'owner') {
+  const isDeveloper = user.email === DEVELOPER_EMAIL;
+
+  // CASHIER - Dark Mode tu
+  if (profile.role === 'cashier' || profile.role === 'employee') {
     root.innerHTML = `
-      <div class="notice error">
-        <h3>Hauruhusiwi</h3>
-        <p>Settings zinapatikana kwa Wamiliki (Owners) pekee.</p>
+      <div class="settings-container">
+        <div class="page-header"><h1>Settings</h1></div>
+        <div class="settings-section">
+          <h3>Muonekano</h3>
+          <div class="setting-item">
+            <div><strong>Dark Mode</strong></div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="dark-mode-toggle" ${profile.dark_mode ? 'checked' : ''} />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
       </div>
     `;
+
+    document.getElementById('dark-mode-toggle').addEventListener('change', async (e) => {
+      const isDark = e.target.checked;
+      await supabase.from('profiles').update({ dark_mode: isDark }).eq('id', user.id);
+      document.body.classList.toggle('dark-mode', isDark);
+    });
+
+    if (profile.dark_mode) document.body.classList.add('dark-mode');
     return;
   }
 
-  // Load current settings for this specific owner (Mabadiliko 1 hapa)
-  const { data: settings } = await supabase
-    .from('business_settings')
-    .select('*')
-    .eq('owner_id', user.id)
-    .single();
+  // OWNER & DEVELOPER
+  let businessSettings = null;
+  if (profile.role === 'owner') {
+    const result = await supabase.from('business_settings').select('*').eq('owner_id', user.id).single();
+    businessSettings = result.data;
+  }
+
+  const avatarUrl = profile.avatar_url || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23e2e8f0"/><text x="50" y="65" font-size="40" text-anchor="middle" fill="%2364748b">' + (profile.full_name || 'U').charAt(0).toUpperCase() + '</text></svg>';
 
   root.innerHTML = `
     <div class="settings-container">
-      <div class="page-header">
-        <h1>Settings za Mfumo</h1>
-      </div>
+      <div class="page-header"><h1>Settings</h1></div>
 
-      <!-- Business Info -->
       <div class="settings-section">
-        <h3><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Taarifa za Biashara</h3>
-        <form id="business-form">
-          <div class="form-grid">
-            <div class="form-group">
-              <label>Jina la Biashara *</label>
-              <input type="text" name="business_name" value="${settings?.business_name || ''}" required />
-            </div>
-            <div class="form-group">
-              <label>Barua Pepe</label>
-              <input type="email" name="business_email" value="${settings?.business_email || ''}" />
-            </div>
-            <div class="form-group">
-              <label>Namba ya Simu</label>
-              <input type="tel" name="business_phone" value="${settings?.business_phone || ''}" />
-            </div>
-            <div class="form-group">
-              <label>Anuani</label>
-              <input type="text" name="business_address" value="${settings?.business_address || ''}" />
-            </div>
-            <div class="form-group">
-              <label>Sarufi (Currency)</label>
-              <input type="text" name="currency" value="${settings?.currency || 'TZS'}" />
-            </div>
-            <div class="form-group span-all">
-              <label>Footer ya Risiti</label>
-              <textarea name="receipt_footer" rows="3">${settings?.receipt_footer || ''}</textarea>
-            </div>
+        <h3>Akaunti na Picha</h3>
+        <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
+          <img id="profile-preview" src="${avatarUrl}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover;" />
+          <div>
+            <input type="file" id="avatar-input" accept="image/*" style="display: none;" />
+            <button type="button" class="btn btn-secondary" onclick="document.getElementById('avatar-input').click()">Badilisha Picha</button>
           </div>
-          <div id="business-message" class="form-message" style="display: none;"></div>
-          <div class="form-buttons">
-            <button type="submit" class="btn btn-primary">Hifadhi Mabadiliko</button>
+        </div>
+        
+        <form id="password-form">
+          <h4>Badilisha Nenosiri</h4>
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
+            <div class="form-group"><label>Nenosiri Jipya</label><input type="password" name="new_password" minlength="6" /></div>
+            <div class="form-group"><label>Thibitisha</label><input type="password" name="confirm_password" minlength="6" /></div>
           </div>
+          <div id="password-message" class="form-message" style="display: none;"></div>
+          <button type="submit" class="btn btn-primary">Sasisha Nenosiri</button>
         </form>
       </div>
 
-      <!-- Appearance -->
+      ${profile.role === 'owner' ? `
       <div class="settings-section">
-        <h3><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg> Muonekano</h3>
-        <div class="setting-item">
-          <div>
-            <strong>Dark Mode</strong>
-            <p class="text-muted text-sm">Badilisha muonekano wa mfumo kuwa giza</p>
+        <h3>Taarifa za Biashara</h3>
+        <form id="business-form">
+          <div class="form-grid">
+            <div class="form-group"><label>Jina la Biashara</label><input type="text" name="business_name" value="${businessSettings?.business_name || ''}" /></div>
+            <div class="form-group"><label>Simu</label><input type="tel" name="business_phone" value="${businessSettings?.business_phone || ''}" /></div>
+            <div class="form-group"><label>Anuani</label><input type="text" name="business_address" value="${businessSettings?.business_address || ''}" /></div>
+            <div class="form-group"><label>Currency</label><input type="text" name="currency" value="${businessSettings?.currency || 'TZS'}" /></div>
           </div>
+          <div id="business-message" class="form-message" style="display: none;"></div>
+          <button type="submit" class="btn btn-primary">Hifadhi</button>
+        </form>
+      </div>
+      ` : ''}
+
+      <div class="settings-section">
+        <h3>Muonekano</h3>
+        <div class="setting-item">
+          <div><strong>Dark Mode</strong></div>
           <label class="toggle-switch">
-            <input type="checkbox" id="dark-mode-toggle" ${settings?.dark_mode ? 'checked' : ''} />
+            <input type="checkbox" id="dark-mode-toggle" ${profile.dark_mode ? 'checked' : ''} />
             <span class="toggle-slider"></span>
           </label>
         </div>
       </div>
 
-      <!-- Backup & Restore -->
+      ${profile.role === 'owner' ? `
       <div class="settings-section">
-        <h3><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Backup & Restore</h3>
-        <div class="backup-actions">
-          <button id="create-backup" class="btn btn-primary">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-            Tengeneza Backup Sasa
-          </button>
-          <button id="export-data" class="btn btn-secondary">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-            Export Data Yote (JSON)
-          </button>
-        </div>
+        <h3>Backup</h3>
+        <button id="export-data" class="btn btn-primary">Export Data (JSON)</button>
         <div id="backup-message" class="form-message" style="display: none;"></div>
       </div>
+      ` : ''}
     </div>
   `;
 
-  // Business form submit
-  document.getElementById('business-form').addEventListener('submit', async (e) => {
+  // Event Listeners
+  document.getElementById('avatar-input')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file || file.size > 2097152) return alert('Picha kubwa sana!');
+    
+    const ext = file.name.split('.').pop();
+    const name = `${user.id}-${Date.now()}.${ext}`;
+    
+    const { error } = await supabase.storage.from('avatars').upload(name, file);
+    if (error) return alert(error.message);
+    
+    const { data } = supabase.storage.from('avatars').getPublicUrl(name);
+    await supabase.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', user.id);
+    document.getElementById('profile-preview').src = data.publicUrl;
+    alert('Picha imesasishwa!');
+  });
+
+  document.getElementById('password-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.target;
-    const message = document.getElementById('business-message');
+    if (form.new_password.value !== form.confirm_password.value) {
+      const msg = document.getElementById('password-message');
+      msg.textContent = 'Nenosiri hazilingani!';
+      msg.className = 'form-message error';
+      msg.style.display = 'block';
+      return;
+    }
+    const { error } = await supabase.auth.updateUser({ password: form.new_password.value });
+    if (error) return alert(error.message);
+    alert('Nenosiri limebadilishwa!');
+    form.reset();
+  });
 
+  document.getElementById('business-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
     const data = {
+      owner_id: user.id,
       business_name: form.business_name.value,
-      business_email: form.business_email.value,
       business_phone: form.business_phone.value,
       business_address: form.business_address.value,
-      currency: form.currency.value,
-      receipt_footer: form.receipt_footer.value,
-      updated_by: user.id
+      currency: form.currency.value
     };
-
-    const { error } = await supabase
-      .from('business_settings')
-      .update(data)
-      .eq('owner_id', user.id); // <-- Mabadiliko 2 hapa
-
-    if (error) {
-      message.textContent = error.message;
-      message.className = 'form-message error';
-      message.style.display = 'block';
-      return;
-    }
-
-    message.textContent = 'Settings zimehifadhiwa kwa mafanikio!';
-    message.className = 'form-message success';
-    message.style.display = 'block';
-
-    setTimeout(() => {
-      message.style.display = 'none';
-    }, 3000);
+    const { error } = await supabase.from('business_settings').upsert(data, { onConflict: 'owner_id' });
+    if (error) return alert(error.message);
+    alert('Imehifadhiwa!');
   });
 
-  // Dark mode toggle
-  document.getElementById('dark-mode-toggle').addEventListener('change', async (e) => {
-    const isDark = e.target.checked;
-
-    const { error } = await supabase
-      .from('business_settings')
-      .update({ dark_mode: isDark })
-      .eq('owner_id', user.id); // <-- Mabadiliko 3 hapa
-
-    if (error) {
-      alert('Hitilafu: ' + error.message);
-      return;
-    }
-
-    if (isDark) {
-      document.body.classList.add('dark-mode');
-    } else {
-      document.body.classList.remove('dark-mode');
-    }
+  document.getElementById('dark-mode-toggle')?.addEventListener('change', async (e) => {
+    await supabase.from('profiles').update({ dark_mode: e.target.checked }).eq('id', user.id);
+    document.body.classList.toggle('dark-mode', e.target.checked);
   });
 
-  // Create backup
-  document.getElementById('create-backup').addEventListener('click', async () => {
-    const message = document.getElementById('backup-message');
-    const button = document.getElementById('create-backup');
-
-    button.disabled = true;
-    button.textContent = 'Inatengeneza backup...';
-
-    try {
-      // Export all data
-      const [products, sales, customers, expenses] = await Promise.all([
-        supabase.from('products').select('*'),
-        supabase.from('sales').select('*'),
-        supabase.from('customers').select('*'),
-        supabase.from('expenses').select('*')
-      ]);
-
-      const backupData = {
-        products: products.data,
-        sales: sales.data,
-        customers: customers.data,
-        expenses: expenses.data,
-        backup_date: new Date().toISOString()
-      };
-
-      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `backup_${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      message.textContent = 'Backup imetengenezwa na kupakuliwa!';
-      message.className = 'form-message success';
-      message.style.display = 'block';
-
-    } catch (error) {
-      message.textContent = error.message;
-      message.className = 'form-message error';
-      message.style.display = 'block';
-    } finally {
-      button.disabled = false;
-      button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Tengeneza Backup Sasa';
-    }
-  });
-
-  // Export data
-  document.getElementById('export-data').addEventListener('click', async () => {
-    const message = document.getElementById('backup-message');
-
-    try {
-      const [products, sales, customers, expenses, categories] = await Promise.all([
-        supabase.from('products').select('*'),
-        supabase.from('sales').select('*'),
-        supabase.from('customers').select('*'),
-        supabase.from('expenses').select('*'),
-        supabase.from('categories').select('*')
-      ]);
-
-      const exportData = {
-        products: products.data,
-        sales: sales.data,
-        customers: customers.data,
-        expenses: expenses.data,
-        categories: categories.data,
-        export_date: new Date().toISOString()
-      };
-
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `stationerypro_data_${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      message.textContent = 'Data imeexport kwa mafanikio!';
-      message.className = 'form-message success';
-      message.style.display = 'block';
-
-    } catch (error) {
-      message.textContent = error.message;
-      message.className = 'form-message error';
-      message.style.display = 'block';
-    }
+  document.getElementById('export-data')?.addEventListener('click', async () => {
+    const [products, sales] = await Promise.all([
+      supabase.from('products').select('*'),
+      supabase.from('sales').select('*')
+    ]);
+    const blob = new Blob([JSON.stringify({ products: products.data, sales: sales.data })], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    alert('Data imeexport!');
   });
 }
