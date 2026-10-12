@@ -1,14 +1,9 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/stationerypro/',
+  base: '/stationerypro/', // Lazima iwe hivi
   build: {
     outDir: 'dist',
-    assetsDir: 'assets',
-    rollupOptions: {
-      output: {
-        manualChunks: undefined
-      }
-    }
+    assetsDir: 'assets'
   }
 });
