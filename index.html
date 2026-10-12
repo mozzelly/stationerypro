@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="sw">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1456c0">
+  <meta name="description" content="StationeryPro — Mfumo wa kusimamia stationery, bidhaa, stock na mauzo. Powered by Mozz Elly.">
+
+  <!-- Favicon inline (hakuna file ya nje inayohitajika) -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231456c0'/><text x='50' y='65' font-size='50' font-weight='bold' fill='white' text-anchor='middle'>SP</text></svg>" />
+
+  <!-- Manifest inline (hakuna file ya nje inayohitajika) -->
+  <link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjoiU3RhdGlvbmVyeVBybyIsInNob3J0X25hbWUiOiJTUCIsInN0YXJ0X3VybCI6Ii4iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjZmZmZmZmIiwidGhlbWVfY29sb3IiOiIjMTQ1NmMwIn0=">
+
+  <title>StationeryPro — Powered by Mozz Elly</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f4f7f5;
+      color: #183629;
+    }
+
+    #app {
+      min-height: 100vh;
+    }
+
+    .startup-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .startup-card {
+      width: 100%;
+      max-width: 400px;
+      padding: 36px 28px;
+      background: #fff;
+      border: 1px solid #e1eae4;
+      border-radius: 18px;
+      text-align: center;
+      box-shadow: 0 12px 40px rgba(18, 59, 42, 0.08);
+    }
+
+    .startup-logo {
+      width: 62px;
+      height: 62px;
+      margin: 0 auto 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 16px;
+      background: #1456c0;
+      color: #fff;
+      font-size: 23px;
+      font-weight: 800;
+      letter-spacing: 1px;
+    }
+
+    .startup-card h1 {
+      margin: 0 0 10px;
+      font-size: 25px;
+    }
+
+    .startup-card p {
+      color: #68786e;
+      font-size: 14px;
+      line-height: 1.7;
+      overflow-wrap: anywhere;
+    }
+
+    .startup-spinner {
+      width: 30px;
+      height: 30px;
+      margin: 24px auto 0;
+      border: 3px solid #dce8df;
+      border-top-color: #1456c0;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .startup-error {
+      color: #b42318 !important;
+    }
+
+    .startup-details {
+      display: none;
+      margin-top: 16px;
+      padding: 12px;
+      background: #fff1f0;
+      border-radius: 8px;
+      color: #912018;
+      text-align: left;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .startup-spinner {
+        animation: none;
+      }
+    }
+  </style>
+  <script type="module" crossorigin src="/stationerypro/assets/index-64yaeyda.js"></script>
+  <link rel="stylesheet" crossorigin href="/stationerypro/assets/index-BLnqZxV8.css">
+</head>
+
+<body>
+  <div id="app">
+    <main class="startup-screen">
+      <section class="startup-card">
+        <div class="startup-logo">SP</div>
+        <h1>StationeryPro</h1>
+        <p id="startup-message" role="status">
+          Tunaandaa mfumo wako. Tafadhali subiri...
+        </p>
+        <div class="startup-spinner" aria-hidden="true"></div>
+        <pre id="startup-details" class="startup-details"></pre>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    window.__stationeryProStarted = false;
+
+    window.__stationeryProShowError = function (message) {
+      const status = document.getElementById("startup-message");
+      const spinner = document.querySelector(".startup-spinner");
+      const details = document.getElementById("startup-details");
+
+      if (status) {
+        status.textContent =
+          "StationeryPro haijaweza kuanza. Taarifa ya hitilafu iko hapa chini.";
+        status.className = "startup-error";
+      }
+
+      if (spinner) {
+        spinner.style.display = "none";
+      }
+
+      if (details) {
+        details.style.display = "block";
+        details.textContent = String(message || "Hitilafu haijulikani.");
+      }
+    };
+
+    window.setTimeout(function () {
+      if (window.__stationeryProStarted) return;
+
+      window.__stationeryProShowError(
+        "Mfumo haujathibitisha kuanza ndani ya sekunde 15. " +
+        "Angalia JavaScript Console na Network kwa faili zilizoshindwa kupakiwa."
+      );
+    }, 15000);
+
+    window.addEventListener("error", function (event) {
+      if (event.message) {
+        console.error("[StationeryPro] JavaScript error:", event.message);
+      }
+    });
+
+    window.addEventListener("unhandledrejection", function (event) {
+      console.error("[StationeryPro] Promise error:", event.reason);
+    });
+  </script>
+
+  <!-- HII NDIO MAREKEBISHO: Slash (/) tu, hakuna dot (.) -->
+</body>
+</html>
