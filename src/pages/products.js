@@ -27,6 +27,12 @@ const commonProducts = [
   { name: 'Mfuko wa Penseli (Pencil Case)', category: 'Accessories', cost: 2000, selling: 4000 }
 ];
 
+// Bidhaa zote (zinatumika kutambua bidhaa inayojirudia wakati wa kuongeza)
+let productCache = [];
+
+const round3 = (v) => Math.round((Number(v) || 0) * 1000) / 1000;
+const normalizeName = (s) => String(s || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
 export async function renderProducts(root, user, profile) {
   root.innerHTML = `
     <div class="page-header">
@@ -81,8 +87,18 @@ export async function renderProducts(root, user, profile) {
               <div class="form-group"><label>Unit (kipimo)</label><input type="text" name="unit" value="piece" /></div>
               <div class="form-group"><label>Bei ya kununua (TSh) *</label><input type="number" name="cost_price" step="0.01" min="0" required /></div>
               <div class="form-group"><label>Bei ya kuuza (TSh) *</label><input type="number" name="selling_price" step="0.01" min="0" required /></div>
-              <div class="form-group"><label>Stock ya Mwanzo *</label><input type="number" name="initial_stock" step="0.001" min="0" required /></div>
-              <div class="form-group"><label>Stock ya Sasa</label><input type="number" name="stock_quantity" step="0.001" min="0" value="0" /></div>
+
+              <!-- STOCK: INAHESABIWA NA MFUMO -->
+              <div class="form-group">
+                <label>Stock iliyopo sasa (zilikuwepo)</label>
+                <input type="number" name="stock_quantity" step="0.001" value="0" readonly />
+              </div>
+              <div class="form-group">
+                <label id="add-stock-label">Idadi uliyopokea leo (acha 0 kama hakuna)</label>
+                <input type="number" name="add_stock" step="0.001" min="0" value="0" />
+                <small id="stock-preview" style="display: block; margin-top: 6px; font-weight: 700; color: var(--blue-dark);"></small>
+              </div>
+
               <div class="form-group"><label>Stock ya Kuagiza Tena (Alert)</label><input type="number" name="reorder_level" step="0.001" min="0" value="5" /></div>
               
               <div class="form-group span-all">
@@ -114,6 +130,11 @@ export async function renderProducts(root, user, profile) {
   document.getElementById('search-product').addEventListener('input', () => loadProducts());
   document.getElementById('filter-category').addEventListener('change', () => loadProducts());
 
+  // Tambua bidhaa iliyopo tayari (kwa jina au SKU) na uhesabu stock kiotomatiki
+  document.getElementById('product-name-input').addEventListener('input', checkExisting);
+  document.querySelector('#product-form input[name="sku"]').addEventListener('input', checkExisting);
+  document.getElementById('product-form').add_stock.addEventListener('input', updateStockPreview);
+
   document.getElementById('barcode-input').addEventListener('change', function(e) {
     const file = e.target.files[0];
     const preview = document.getElementById('barcode-preview');
@@ -123,6 +144,84 @@ export async function renderProducts(root, user, profile) {
       reader.readAsDataURL(file);
     } else { preview.innerHTML = ''; }
   });
+}
+
+async function refreshProductCache() {
+  const { data } = await supabase
+    .from('products')
+    .select('id, name, sku, category_id, unit, cost_price, selling_price, reorder_level, stock_quantity');
+  productCache = data || [];
+}
+
+function findExisting(name, sku) {
+  const n = normalizeName(name);
+  const k = String(sku || '').trim().toLowerCase();
+  return productCache.find(p =>
+    (n && normalizeName(p.name) === n) ||
+    (k && p.sku && String(p.sku).trim().toLowerCase() === k)
+  ) || null;
+}
+
+// Inaangalia kama bidhaa unayoandika tayari ipo, na kuonyesha zilizokuwepo
+function checkExisting() {
+  const form = document.getElementById('product-form');
+  if (!form || form.dataset.productId) return; // tunahariri, si kuongeza
+
+  const match = findExisting(form.name.value, form.sku.value);
+
+  if (match) {
+    if (form.dataset.matchId !== match.id) {
+      // Jaza taarifa za bidhaa iliyopo ili zisibadilike kwa bahati mbaya
+      form.category_id.value = match.category_id || '';
+      form.unit.value = match.unit || 'piece';
+      form.cost_price.value = match.cost_price;
+      form.selling_price.value = match.selling_price;
+      form.reorder_level.value = match.reorder_level;
+      form.dataset.prefilled = '1';
+    }
+    form.dataset.matchId = match.id;
+    form.dataset.matchName = match.name;
+    form.stock_quantity.value = match.stock_quantity;
+  } else {
+    if (form.dataset.prefilled) {
+      // Bidhaa iliyokuwa imepatikana haipo tena (jina limebadilishwa): futa tulichojaza
+      form.category_id.value = '';
+      form.unit.value = 'piece';
+      form.cost_price.value = '';
+      form.selling_price.value = '';
+      form.reorder_level.value = 5;
+      delete form.dataset.prefilled;
+    }
+    delete form.dataset.matchId;
+    delete form.dataset.matchName;
+    form.stock_quantity.value = 0;
+  }
+
+  updateStockPreview();
+}
+
+// Inaonyesha: zilikuwepo ngapi, umepokea ngapi, sasa zitakuwa ngapi
+function updateStockPreview() {
+  const form = document.getElementById('product-form');
+  const preview = document.getElementById('stock-preview');
+  if (!form || !preview) return;
+
+  const current = round3(form.stock_quantity.value);
+  const add = round3(form.add_stock.value);
+  const editing = !!form.dataset.productId;
+  const matched = !editing && form.dataset.matchId;
+
+  if (editing) {
+    preview.textContent = add !== 0
+      ? `Zilikuwepo: ${current}, mabadiliko: ${add > 0 ? '+' : ''}${add}, sasa zitakuwa: ${round3(current + add)}`
+      : '';
+  } else if (matched) {
+    preview.textContent = `Bidhaa hii ipo tayari ("${form.dataset.matchName}"). Zilikuwepo: ${current}, umepokea: ${add}, sasa zitakuwa: ${round3(current + add)}. Itaongezwa kwenye bidhaa hiyo, haitaunda nakala.`;
+  } else {
+    preview.textContent = add > 0
+      ? `Bidhaa mpya. Zilikuwepo: 0, umepokea: ${add}, sasa zitakuwa: ${add}`
+      : '';
+  }
 }
 
 // Function ya kuweka mapendekezo na kujaza bei kiotomatiki
@@ -204,18 +303,38 @@ async function loadCategories() {
 function openModal(product = null) {
   const form = document.getElementById('product-form');
   const preview = document.getElementById('barcode-preview');
+  const addLabel = document.getElementById('add-stock-label');
+
+  delete form.dataset.matchId;
+  delete form.dataset.matchName;
+  delete form.dataset.prefilled;
+
   if (product) {
     document.getElementById('modal-title').textContent = 'Hariri Bidhaa';
     form.name.value = product.name; form.sku.value = product.sku || ''; form.category_id.value = product.category_id || '';
     form.unit.value = product.unit || 'piece'; form.cost_price.value = product.cost_price; form.selling_price.value = product.selling_price;
-    form.initial_stock.value = product.initial_stock || 0; form.stock_quantity.value = product.stock_quantity; form.reorder_level.value = product.reorder_level;
+    form.stock_quantity.value = product.stock_quantity; form.add_stock.value = 0; form.reorder_level.value = product.reorder_level;
     form.dataset.productId = product.id;
+
+    // Kuhariri: inaruhusu kuongeza au kupunguza (namba hasi)
+    form.add_stock.removeAttribute('min');
+    addLabel.textContent = 'Ongeza stock mpya (tumia − kupunguza)';
+
     if (product.barcode_image) preview.innerHTML = `<img src="${product.barcode_image}" style="max-width: 100%; border: 1px solid var(--border); border-radius: 4px;" />`;
     else preview.innerHTML = '';
   } else {
     document.getElementById('modal-title').textContent = 'Ongeza Bidhaa';
-    form.reset(); delete form.dataset.productId; preview.innerHTML = '';
+    delete form.dataset.productId;
+    form.reset(); preview.innerHTML = '';
+
+    form.add_stock.setAttribute('min', '0');
+    addLabel.textContent = 'Idadi uliyopokea leo (acha 0 kama hakuna)';
+
+    // Pakia orodha ya bidhaa ili kutambua zilizopo tayari
+    refreshProductCache().then(checkExisting);
   }
+
+  updateStockPreview();
   document.getElementById('product-modal').style.display = 'flex';
 }
 
@@ -224,37 +343,93 @@ function closeModal() {
   document.getElementById('form-message').style.display = 'none';
 }
 
+// Inajumlisha stock kwa usalama (database inafanya hesabu, si kivinjari)
+async function adjustStock(productId, qty) {
+  const { data, error } = await supabase.rpc('add_product_stock', { p_product_id: productId, p_qty: qty });
+  if (!error) {
+    const n = Number(data);
+    return { newQty: Number.isFinite(n) ? n : null, error: null };
+  }
+
+  // Kama function haijawekwa kwenye database, tumia njia mbadala
+  const missing = error.code === 'PGRST202' || /could not find the function|does not exist/i.test(error.message || '');
+  if (!missing) return { newQty: null, error };
+
+  const { data: row, error: readError } = await supabase.from('products').select('stock_quantity').eq('id', productId).single();
+  if (readError) return { newQty: null, error: readError };
+
+  const newQty = (Number(row.stock_quantity) || 0) + qty;
+  if (newQty < 0) return { newQty: null, error: { message: 'Stock haiwezi kuwa chini ya 0.' } };
+
+  const { error: updateError } = await supabase.from('products').update({ stock_quantity: newQty }).eq('id', productId);
+  return { newQty, error: updateError || null };
+}
+
 async function saveProduct() {
   const form = document.getElementById('product-form');
   const message = document.getElementById('form-message');
-  const productId = form.dataset.productId;
+  const editingId = form.dataset.productId || '';
+  const matchId = !editingId ? (form.dataset.matchId || '') : '';
+  const targetId = editingId || matchId; // bidhaa itakayosasishwa (kama ipo)
   const barcodeFile = form.barcode_image.files[0];
 
+  const rawAdd = parseFloat(form.add_stock.value) || 0;
+  const received = editingId ? rawAdd : Math.max(0, rawAdd);
+  const skuValue = form.sku.value.trim();
+
   // Ulinzi wa ziada: trim() inaondoa nafasi zisizohitajika, na kubadilisha string tupu kuwa null
+  // Stock haimo hapa: inashughulikiwa tofauti ili isiandikwe juu ya mauzo yanayoendelea
   const baseData = {
-    name: form.name.value.trim(), 
-    sku: form.sku.value.trim() === '' ? null : form.sku.value.trim(), 
+    name: matchId ? form.dataset.matchName : form.name.value.trim(), 
+    sku: skuValue === '' ? null : skuValue, 
     category_id: form.category_id.value === '' ? null : form.category_id.value,
     unit: form.unit.value.trim() || 'piece', 
     cost_price: parseFloat(form.cost_price.value) || 0, 
     selling_price: parseFloat(form.selling_price.value) || 0,
-    initial_stock: parseFloat(form.initial_stock.value) || 0, 
-    stock_quantity: parseFloat(form.stock_quantity.value) || 0,
     reorder_level: parseFloat(form.reorder_level.value) || 5
+  };
+  // Bidhaa iliyopo: usifute SKU yake ikiwa hukuijaza
+  if (matchId && skuValue === '') delete baseData.sku;
+
+  const showError = (text) => {
+    message.textContent = text;
+    message.className = 'form-message error';
+    message.style.display = 'block';
   };
 
   const executeSave = async (barcodeDataUrl) => {
     const finalData = { ...baseData, barcode_image: barcodeDataUrl };
-    const result = productId ? await supabase.from('products').update(finalData).eq('id', productId) : await supabase.from('products').insert([finalData]);
-    
+    let result;
+
+    if (targetId) {
+      // Bidhaa ipo: sasisha taarifa zake (stock inaongezwa baadaye kwa hesabu ya mfumo)
+      result = await supabase.from('products').update(finalData).eq('id', targetId);
+    } else {
+      // Bidhaa mpya: stock ya sasa = ulichopokea (0 kama hakuna)
+      result = await supabase.from('products').insert([{ ...finalData, initial_stock: received, stock_quantity: received }]);
+    }
+
     if (result.error) { 
-      message.textContent = result.error.message; 
-      message.className = 'form-message error'; 
-      message.style.display = 'block'; 
+      showError(result.error.message);
       return; 
     }
-    
-    message.textContent = productId ? 'Bidhaa imesasishwa!' : 'Bidhaa imeongezwa!';
+
+    let note = '';
+    if (targetId && received !== 0) {
+      const adj = await adjustStock(targetId, received);
+      if (adj.error) {
+        showError('Bidhaa imehifadhiwa, lakini stock haikubadilika: ' + adj.error.message);
+        loadProducts();
+        return;
+      }
+      if (adj.newQty !== null) note = ` Stock: ${round3(adj.newQty - received)} → ${round3(adj.newQty)}.`;
+    } else if (!targetId && received > 0) {
+      note = ` Stock: 0 → ${received}.`;
+    }
+
+    message.textContent = (targetId
+      ? (matchId ? 'Bidhaa ilikuwepo, imesasishwa!' : 'Bidhaa imesasishwa!')
+      : 'Bidhaa imeongezwa!') + note;
     message.className = 'form-message success'; 
     message.style.display = 'block';
     setTimeout(() => { closeModal(); loadProducts(); }, 1500);
@@ -265,8 +440,8 @@ async function saveProduct() {
     reader.onload = (e) => executeSave(e.target.result);
     reader.readAsDataURL(barcodeFile);
   } else {
-    if (productId) {
-      const { data } = await supabase.from('products').select('barcode_image').eq('id', productId).single();
+    if (targetId) {
+      const { data } = await supabase.from('products').select('barcode_image').eq('id', targetId).single();
       executeSave(data?.barcode_image || null);
     } else { 
       executeSave(null); 
