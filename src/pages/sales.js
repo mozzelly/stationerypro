@@ -1,364 +1,277 @@
 import { supabase } from '../lib/supabase.js';
+import {
+  icon, money, esc, fmtDateTime, parseYmd, addDays, isCancelled, normalizeMethod, KNOWN_METHODS,
+  methodLabel, grossOf, vatOf, paidShown, balanceShown, STATUS_LABELS, saleStatus, statusBadge,
+  receiptLink, cashierName, loadCashierNames, fetchAll, fetchByIds, computeFinance, payCardsHtml,
+  statCard, ensureSharedStyles, createDetailModal, openFinanceBox, downloadCsv, chipsHtml,
+  markChip, rangeFor
+} from '../lib/shared.js';
 
 export async function renderSales(root, user, profile) {
-  // Set default dates (Mwezi huu)
-  const today = new Date();
-  const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
-  const todayString = today.toISOString().split('T')[0];
+  ensureSharedStyles();
+  const modal = createDetailModal();
+  modal.bind(root);
+
+  const $ = (sel) => root.querySelector(sel);
+  const isOwner = profile.role === 'owner';
+  const init = rangeFor('month');
+  const st = { all: [], payments: [], filtered: [], f: null, visible: 100 };
 
   root.innerHTML = `
     <div class="sales-container">
       <div class="page-header">
         <h1>Historia ya Mauzo</h1>
-        <button id="export-sales" class="btn btn-secondary">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-          Export CSV
-        </button>
+        <button id="export-sales" class="btn btn-secondary">${icon('download', 18)} Export CSV</button>
       </div>
 
-      <!-- Summary Stats -->
-      <div class="stats-grid" id="sales-stats">
-        <div class="stat-card">
-          <div class="stat-icon" style="background: #dbeafe; color: #1e40af;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-          </div>
-          <div class="stat-content">
-            <p class="stat-label">Jumla ya Mauzo</p>
-            <h3 class="stat-value" id="total-sales">TSh 0</h3>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-icon" style="background: #dcfce7; color: #166534;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
-          </div>
-          <div class="stat-content">
-            <p class="stat-label">Idadi ya Risiti</p>
-            <h3 class="stat-value" id="total-count">0</h3>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-icon" style="background: #fef3c7; color: #92400e;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
-          </div>
-          <div class="stat-content">
-            <p class="stat-label">Wastani kwa Risiti</p>
-            <h3 class="stat-value" id="avg-sale">TSh 0</h3>
-          </div>
-        </div>
-      </div>
-
-      <!-- Filters -->
       <div class="filter-card">
-        <div class="filter-row">
+        ${chipsHtml('month')}
+        <div class="filter-row" style="margin-top: 12px;">
           <div class="form-group">
             <label>Kuanzia</label>
-            <input type="date" id="sales-from" value="${firstDayOfMonth}" />
+            <input type="date" id="sales-from" value="${init.from}" />
           </div>
           <div class="form-group">
             <label>Mpaka</label>
-            <input type="date" id="sales-to" value="${todayString}" />
+            <input type="date" id="sales-to" value="${init.to}" />
           </div>
           <div class="form-group">
-            <label>Tafuta</label>
+            <label>Tafuta risiti</label>
             <input type="text" id="search-sale" placeholder="Namba ya risiti..." />
           </div>
+          <div class="form-group">
+            <label>Hali</label>
+            <select id="filter-status">
+              <option value="">Zote</option>
+              <option value="paid">Imelipwa</option>
+              <option value="partial">Imelipwa Kiasi</option>
+              <option value="unpaid">Haijalipwa</option>
+              <option value="credit">Mkopo</option>
+              <option value="cancelled">Imefutwa</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Njia ya malipo</label>
+            <select id="filter-method">
+              <option value="">Zote</option>
+              <option value="cash">Cash</option>
+              <option value="mobile_money">Mobile Money</option>
+              <option value="card">Card</option>
+              <option value="bank">Bank</option>
+              <option value="credit">Mkopo</option>
+              <option value="other">Nyingine</option>
+            </select>
+          </div>
+          ${isOwner ? `
+          <div class="form-group">
+            <label>Mfanyakazi</label>
+            <select id="filter-cashier"><option value="">Wote</option></select>
+          </div>` : ''}
           <div class="form-group" style="align-self: flex-end;">
-            <button id="filter-sales" class="btn btn-primary">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
-              Tafuta
-            </button>
+            <button id="filter-sales" class="btn btn-primary">${icon('search', 16)} Tafuta</button>
           </div>
         </div>
       </div>
 
-      <!-- Sales Table -->
-      <div class="table-wrap">
+      <div id="sales-stats" class="stats-grid" style="margin-top: 16px;"></div>
+
+      <div class="ui-section"><h2>Mapato kwa Njia ya Malipo</h2></div>
+      <div id="sales-pay"></div>
+
+      <div class="table-wrap" style="margin-top: 24px;">
         <table id="sales-table">
           <thead>
             <tr>
               <th>Namba ya Risiti</th>
               <th>Tarehe</th>
-              <th>Mteja</th>
+              <th>Mfanyakazi</th>
               <th>Subtotal</th>
               <th>Discount</th>
+              <th>VAT</th>
               <th>Jumla</th>
-              <th>Hali ya Malipo</th>
+              <th>Njia</th>
+              <th>Hali</th>
               <th>Vitendo</th>
             </tr>
           </thead>
           <tbody id="sales-body">
-            <tr><td colspan="8" class="empty-state">Inapakia...</td></tr>
+            <tr><td colspan="10" class="empty-state">Inapakia...</td></tr>
           </tbody>
         </table>
       </div>
-
-      <!-- Sale Details Modal -->
-      <div id="sale-modal" class="modal-overlay" style="display: none;">
-        <div class="modal" style="max-width: 600px;">
-          <div class="modal-header">
-            <h3>Maelezo ya Mauzo</h3>
-            <button class="modal-close" id="close-modal">×</button>
-          </div>
-          <div class="modal-body" id="sale-details-content">
-            <p class="muted">Inapakia maelezo...</p>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-secondary" id="cancel-view">Funga</button>
-            <button class="btn btn-primary" id="print-sale">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
-              Print Risiti
-            </button>
-          </div>
-        </div>
-      </div>
+      <div id="sales-more" style="text-align: center; margin: 14px 0;"></div>
     </div>
   `;
 
-  let salesData = [];
-
-  async function loadSales() {
-    const from = document.getElementById('sales-from').value;
-    const to = document.getElementById('sales-to').value;
-    const search = document.getElementById('search-sale').value;
-    const tbody = document.getElementById('sales-body');
-
-    let query = supabase
-      .from('sales')
-      .select('*, profiles(full_name)')
-      .order('created_at', { ascending: false })
-      .limit(500);
-
-    // Filter by date
-    if (from) {
-      query = query.gte('created_at', new Date(from + 'T00:00:00').toISOString());
-    }
-    if (to) {
-      query = query.lt('created_at', new Date(new Date(to + 'T00:00:00').getTime() + 86400000).toISOString());
-    }
-
-    // Filter by cashier if not owner
-    if (profile.role !== 'owner') {
-      query = query.eq('cashier_id', user.id);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Error loading sales:', error);
-      tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Hitilafu: ${error.message}</td></tr>`;
-      return;
-    }
-
-    salesData = data || [];
-
-    // Filter by search
-    if (search) {
-      salesData = salesData.filter(s => 
-        s.receipt_number.toLowerCase().includes(search.toLowerCase())
-      );
-    }
-
-    // Update stats
-    const totalSales = salesData.reduce((sum, s) => sum + parseFloat(s.total), 0);
-    const avgSale = salesData.length > 0 ? totalSales / salesData.length : 0;
-
-    document.getElementById('total-sales').textContent = window.money(totalSales);
-    document.getElementById('total-count').textContent = salesData.length;
-    document.getElementById('avg-sale').textContent = window.money(avgSale);
-
-    // Render table
-    if (salesData.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Hakuna mauzo yaliyopatikana</td></tr>';
-      return;
-    }
-
-    tbody.innerHTML = salesData.map(sale => {
-      const paymentStatus = sale.payment_status || 'unpaid';
-      let statusBadge = '';
-      
-      if (paymentStatus === 'paid') {
-        statusBadge = '<span class="badge badge-success">Imelipwa</span>';
-      } else if (paymentStatus === 'partial') {
-        statusBadge = '<span class="badge badge-warning">Imelipwa Kiasi</span>';
-      } else {
-        statusBadge = '<span class="badge badge-danger">Haijalipwa</span>';
-      }
-
-      return `
-        <tr>
-          <td><strong>${sale.receipt_number}</strong></td>
-          <td>${new Date(sale.created_at).toLocaleString('sw-TZ')}</td>
-          <td>${sale.profiles?.full_name || 'Mfanyakazi'}</td>
-          <td>${window.money(sale.subtotal)}</td>
-          <td>${window.money(sale.discount)}</td>
-          <td><strong>${window.money(sale.total)}</strong></td>
-          <td>${statusBadge}</td>
-          <td>
-            <button class="btn btn-sm btn-secondary" onclick="viewSaleDetails('${sale.id}')">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-              Details
-            </button>
-          </td>
-        </tr>
-      `;
-    }).join('');
+  function populateCashiers() {
+    const select = $('#filter-cashier');
+    if (!select) return;
+    const current = select.value;
+    const map = new Map();
+    st.all.forEach((s) => { if (s.cashier_id) map.set(s.cashier_id, cashierName(s)); });
+    select.innerHTML = '<option value="">Wote</option>' +
+      [...map.entries()].map(([id, name]) => `<option value="${esc(id)}">${esc(name)}</option>`).join('');
+    select.value = map.has(current) ? current : '';
   }
 
-  window.viewSaleDetails = async (saleId) => {
-    const modal = document.getElementById('sale-modal');
-    const content = document.getElementById('sale-details-content');
-    
-    modal.style.display = 'flex';
-    content.innerHTML = '<p class="muted">Inapakia maelezo...</p>';
+  async function loadSales() {
+    const from = $('#sales-from').value;
+    const to = $('#sales-to').value;
+    const search = $('#search-sale').value.trim();
+    const tbody = $('#sales-body');
+    if (!from || !to) return;
+
+    tbody.innerHTML = '<tr><td colspan="10" class="empty-state">Inapakia...</td></tr>';
 
     try {
-      const [saleResult, itemsResult, paymentsResult] = await Promise.all([
-        supabase.from('sales').select('*').eq('id', saleId).single(),
-        supabase.from('sale_items').select('*').eq('sale_id', saleId),
-        supabase.from('payments').select('*').eq('sale_id', saleId)
-      ]);
+      const fromDate = parseYmd(from);
+      const toEx = addDays(parseYmd(to), 1);
 
-      if (saleResult.error) throw saleResult.error;
-      if (itemsResult.error) throw itemsResult.error;
-      if (paymentsResult.error) throw paymentsResult.error;
+      st.all = await fetchAll((a, b) => {
+        let q = supabase
+          .from('sales')
+          .select('*, profiles(full_name)')
+          .gte('created_at', fromDate.toISOString())
+          .lt('created_at', toEx.toISOString())
+          .order('created_at', { ascending: false });
+        if (!isOwner) q = q.eq('cashier_id', user.id);
+        if (search) q = q.ilike('receipt_number', `%${search}%`);
+        return q.range(a, b);
+      });
 
-      const sale = saleResult.data;
-      const items = itemsResult.data || [];
-      const payments = paymentsResult.data || [];
-
-      content.innerHTML = `
-        <div class="receipt" style="border: none; box-shadow: none; margin: 0; max-width: 100%;">
-          <div class="receipt-center" style="margin-bottom: 20px;">
-            <h2 style="margin: 0; color: var(--blue-dark);">StationeryPro</h2>
-            <p style="margin: 4px 0; color: var(--muted);">Risiti Namba: <strong>${sale.receipt_number}</strong></p>
-            <p style="margin: 4px 0; color: var(--muted);">${new Date(sale.created_at).toLocaleString('sw-TZ')}</p>
-            <p style="margin: 4px 0; color: var(--muted);">Mfanyakazi: ${sale.profiles?.full_name || '-'}</p>
-          </div>
-
-          <hr style="margin: 16px 0; border: none; border-top: 1px dashed var(--border);">
-
-          <div style="margin-bottom: 16px;">
-            ${items.map(item => `
-              <div class="receipt-row" style="padding: 8px 0;">
-                <div>
-                  <strong>${item.product_name}</strong>
-                  <small style="color: var(--muted); display: block;">${item.quantity} × ${window.money(item.unit_price)}</small>
-                </div>
-                <div style="text-align: right;">
-                  <strong>${window.money(item.line_total)}</strong>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-
-          <hr style="margin: 16px 0; border: none; border-top: 1px dashed var(--border);">
-
-          <div class="receipt-row" style="padding: 8px 0;">
-            <span>Subtotal:</span>
-            <span>${window.money(sale.subtotal)}</span>
-          </div>
-          <div class="receipt-row" style="padding: 8px 0;">
-            <span>Discount:</span>
-            <span>${window.money(sale.discount)}</span>
-          </div>
-          <div class="receipt-row receipt-total" style="padding: 12px 0; margin-top: 8px; border-top: 2px solid var(--border); font-size: 16px;">
-            <strong>Jumla:</strong>
-            <strong style="color: var(--blue); font-size: 18px;">${window.money(sale.total)}</strong>
-          </div>
-
-          ${payments.length > 0 ? `
-            <hr style="margin: 16px 0; border: none; border-top: 1px dashed var(--border);">
-            <div style="margin-top: 16px;">
-              <h4 style="margin-bottom: 12px; color: var(--blue-dark);">Malipo Yaliyopokelewa:</h4>
-              ${payments.map(p => `
-                <div class="receipt-row" style="padding: 6px 0;">
-                  <span>${p.method === 'cash' ? 'Cash' : p.method === 'mobile_money' ? 'Mobile Money' : p.method === 'bank' ? 'Bank' : p.method === 'card' ? 'Card' : 'Nyingine'}</span>
-                  <span>${window.money(p.amount)}</span>
-                </div>
-              `).join('')}
-            </div>
-          ` : ''}
-
-          ${sale.balance > 0 ? `
-            <div style="margin-top: 16px; padding: 12px; background: var(--danger-light); border-radius: var(--radius); color: var(--danger); text-align: center;">
-              <strong>Baki: ${window.money(sale.balance)}</strong>
-            </div>
-          ` : ''}
-        </div>
-      `;
-
-      // Store sale data for printing
-      modal.dataset.currentSaleId = saleId;
-
+      await loadCashierNames(st.all);
+      modal.known = st.all;
+      st.payments = await fetchByIds('payments', 'sale_id', st.all.map((s) => s.id));
+      populateCashiers();
+      applyFilters();
     } catch (error) {
-      console.error('Error loading sale details:', error);
-      content.innerHTML = `<div class="notice error">Hitilafu: ${error.message}</div>`;
+      console.error('Error loading sales:', error);
+      tbody.innerHTML = `<tr><td colspan="10" class="empty-state">Hitilafu: ${esc(error.message)}</td></tr>`;
     }
-  };
+  }
 
-  // Event Listeners
-  document.getElementById('filter-sales').addEventListener('click', loadSales);
-  
-  document.getElementById('search-sale').addEventListener('input', (e) => {
-    if (e.target.value.length === 0 || e.target.value.length >= 3) {
-      loadSales();
-    }
-  });
+  function applyFilters() {
+    const status = $('#filter-status').value;
+    const method = $('#filter-method').value;
+    const cashier = isOwner ? $('#filter-cashier').value : '';
 
-  document.getElementById('close-modal').addEventListener('click', () => {
-    document.getElementById('sale-modal').style.display = 'none';
-  });
+    st.filtered = st.all.filter((s) => {
+      if (status && saleStatus(s) !== status) return false;
+      if (method) {
+        const m = normalizeMethod(s.payment_method);
+        const isOther = !KNOWN_METHODS.includes(m) && m !== 'credit';
+        if (method === 'other' ? !isOther : m !== method) return false;
+      }
+      if (cashier && s.cashier_id !== cashier) return false;
+      return true;
+    });
 
-  document.getElementById('cancel-view').addEventListener('click', () => {
-    document.getElementById('sale-modal').style.display = 'none';
-  });
+    const active = st.filtered.filter((s) => !isCancelled(s));
+    st.f = {
+      ...computeFinance({ sales: active, payments: st.payments }),
+      label: `${$('#sales-from').value} hadi ${$('#sales-to').value}`
+    };
+    st.visible = 100;
+    paint();
+  }
 
-  document.getElementById('print-sale').addEventListener('click', () => {
-    window.print();
-  });
+  function paint() {
+    const f = st.f;
 
-  document.getElementById('export-sales').addEventListener('click', () => {
-    if (salesData.length === 0) {
-      alert('Hakuna data ya kutoa nje.');
+    $('#sales-stats').innerHTML = [
+      statCard({ key: 'fin-sales', ic: 'dollar-sign', bg: '#dbeafe', color: '#1e40af', label: 'Jumla ya Mauzo', value: money(f.grossSales), sub: f.vat > 0 ? `Bila VAT: ${money(f.revenue)}` : '' }),
+      statCard({ key: 'fin-count', ic: 'shopping-cart', bg: '#dcfce7', color: '#166534', label: 'Idadi ya Risiti', value: String(f.sales.length) }),
+      statCard({ key: 'fin-avg', ic: 'dollar-sign', bg: '#fef3c7', color: '#92400e', label: 'Wastani kwa Risiti', value: money(f.sales.length ? f.grossSales / f.sales.length : 0) }),
+      statCard({ key: 'fin-discount', ic: 'tag', bg: '#fee2e2', color: '#991b1b', label: 'Discount', value: money(f.discount) }),
+      statCard({ key: 'fin-vat', ic: 'percent', bg: '#ede9fe', color: '#5b21b6', label: 'VAT', value: money(f.vat) })
+    ].join('');
+
+    $('#sales-pay').innerHTML = payCardsHtml(f);
+
+    const tbody = $('#sales-body');
+    if (st.filtered.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="10" class="empty-state">Hakuna mauzo yaliyopatikana</td></tr>';
+      $('#sales-more').innerHTML = '';
       return;
     }
 
-    const headers = ['Namba ya Risiti', 'Tarehe', 'Mfanyakazi', 'Subtotal', 'Discount', 'Jumla', 'Hali ya Malipo'];
-    const rows = salesData.map(sale => [
-      sale.receipt_number,
-      new Date(sale.created_at).toLocaleString('sw-TZ'),
-      sale.profiles?.full_name || '-',
-      sale.subtotal,
-      sale.discount,
-      sale.total,
-      sale.payment_status || 'unpaid'
-    ]);
+    tbody.innerHTML = st.filtered.slice(0, st.visible).map((s) => `
+      <tr>
+        <td>${receiptLink(s, 'strong')}</td>
+        <td>${fmtDateTime(s.created_at)}</td>
+        <td>${esc(cashierName(s))}</td>
+        <td>${money(s.subtotal)}</td>
+        <td>${money(s.discount)}</td>
+        <td>${vatOf(s) > 0 ? money(vatOf(s)) : '-'}</td>
+        <td><strong>${money(grossOf(s))}</strong></td>
+        <td>${esc(methodLabel(s.payment_method))}</td>
+        <td>${statusBadge(s)}</td>
+        <td>
+          <button class="btn btn-sm btn-secondary" data-sale-id="${esc(s.id)}">${icon('eye', 16)} Risiti</button>
+        </td>
+      </tr>
+    `).join('');
 
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-    ].join('\r\n');
+    const remaining = st.filtered.length - st.visible;
+    $('#sales-more').innerHTML = remaining > 0
+      ? `<button id="show-more" class="btn btn-secondary">Onyesha zaidi (${remaining} zimebaki)</button>`
+      : '';
+  }
 
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Mauzo_${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  function exportCsv() {
+    if (st.filtered.length === 0) return alert('Hakuna data ya kutoa nje.');
+    downloadCsv(
+      `Mauzo_${$('#sales-from').value}_${$('#sales-to').value}.csv`,
+      ['Namba ya Risiti', 'Tarehe', 'Mfanyakazi', 'Subtotal', 'Discount', 'VAT', 'Jumla', 'Njia ya Malipo', 'Imelipwa', 'Baki', 'Hali'],
+      st.filtered.map((s) => [
+        s.receipt_number, fmtDateTime(s.created_at), cashierName(s), s.subtotal, s.discount,
+        vatOf(s), grossOf(s), methodLabel(s.payment_method), paidShown(s), balanceShown(s),
+        STATUS_LABELS[saleStatus(s)]
+      ])
+    );
+  }
+
+  root.addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-range]');
+    if (chip) {
+      const r = rangeFor(chip.dataset.range);
+      $('#sales-from').value = r.from;
+      $('#sales-to').value = r.to;
+      markChip(root, chip.dataset.range);
+      loadSales();
+      return;
+    }
+    const box = e.target.closest('[data-box]');
+    if (box && root.contains(box)) return openFinanceBox(modal, box.dataset.box, st.f);
+
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    if (btn.id === 'filter-sales') { markChip(root, ''); loadSales(); }
+    if (btn.id === 'export-sales') exportCsv();
+    if (btn.id === 'show-more') { st.visible += 100; paint(); }
   });
 
-  // Close modal on outside click
-  document.getElementById('sale-modal').addEventListener('click', (e) => {
-    if (e.target.id === 'sale-modal') {
-      document.getElementById('sale-modal').style.display = 'none';
+  root.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const box = e.target.closest('[data-box]');
+    if (box && root.contains(box)) {
+      e.preventDefault();
+      openFinanceBox(modal, box.dataset.box, st.f);
     }
   });
 
-  // Initial load
+  ['#filter-status', '#filter-method', '#filter-cashier'].forEach((sel) => {
+    const el = $(sel);
+    if (el) el.addEventListener('change', applyFilters);
+  });
+  $('#sales-from').addEventListener('change', () => markChip(root, ''));
+  $('#sales-to').addEventListener('change', () => markChip(root, ''));
+
+  let searchTimer;
+  $('#search-sale').addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(loadSales, 350);
+  });
+
   await loadSales();
 }

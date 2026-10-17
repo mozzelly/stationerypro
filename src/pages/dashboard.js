@@ -36,11 +36,26 @@ const PAY_DEFS = [
   { key: 'mobile_money', label: 'Mobile Money', ic: 'smartphone', bg: '#dbeafe', color: '#1e40af' },
   { key: 'card', label: 'Card', ic: 'credit-card', bg: '#ede9fe', color: '#5b21b6' },
   { key: 'bank', label: 'Bank', ic: 'landmark', bg: '#fef3c7', color: '#92400e' },
-  { key: 'credit', label: 'Mkopo (Baki)', ic: 'clock', bg: '#fee2e2', color: '#991b1b' }
+  { key: 'credit', label: 'Mkopo', ic: 'clock', bg: '#fee2e2', color: '#991b1b' }
 ];
 const KNOWN_METHODS = ['cash', 'mobile_money', 'card', 'bank'];
 
-let state = { products: [], todaySales: [], fin: null };
+// Majina mbadala ya njia za malipo (ili yasiishie kwenye "Nyingine")
+const METHOD_ALIASES = {
+  credit: 'credit', mkopo: 'credit', loan: 'credit', deni: 'credit', on_credit: 'credit', credit_sale: 'credit',
+  cash: 'cash', taslimu: 'cash',
+  mobile_money: 'mobile_money', mobile: 'mobile_money', mpesa: 'mobile_money', m_pesa: 'mobile_money',
+  tigopesa: 'mobile_money', tigo_pesa: 'mobile_money', airtel_money: 'mobile_money', halopesa: 'mobile_money',
+  card: 'card', kadi: 'card',
+  bank: 'bank', bank_transfer: 'bank', transfer: 'bank'
+};
+
+const MONTHS_SW = ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ago', 'Sep', 'Okt', 'Nov', 'Des'];
+
+let state = {
+  products: [], todaySales: [], recent: [], fin: null,
+  cashiers: new Map(), modal: null, modalStack: []
+};
 
 /* ---------- Vitu vya kusaidia ---------- */
 const num = (v) => Number(v) || 0;
@@ -60,14 +75,42 @@ const setText = (id, text) => {
   if (el) el.textContent = text;
 };
 
+const normalizeMethod = (m) => {
+  const k = String(m || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  return METHOD_ALIASES[k] || k;
+};
+const isCreditSale = (s) => normalizeMethod(s.payment_method) === 'credit';
+const methodLabel = (m) => {
+  const k = normalizeMethod(m);
+  const d = PAY_DEFS.find((x) => x.key === k);
+  return d ? d.label : k || '-';
+};
+
 // Kilicholipwa na baki: sales haina safu ya balance, kwa hiyo tunahesabu
 // kutoka payment_status na amount_paid.
 const paidOf = (s) => {
+  if (num(s.amount_paid) > 0) return Math.min(num(s.amount_paid), num(s.total));
   if (s.payment_status === 'paid') return num(s.total);
-  if (s.amount_paid != null) return Math.min(num(s.amount_paid), num(s.total));
   return 0;
 };
 const balanceOf = (s) => Math.max(0, num(s.total) - paidOf(s));
+
+// Kwa maonyesho: mauzo ya mkopo hayahesabiwi kama yamelipwa
+const paidShown = (s) => (isCreditSale(s) ? 0 : paidOf(s));
+const balanceShown = (s) => Math.max(0, num(s.total) - paidShown(s));
+
+const cashierName = (s) => s.profiles?.full_name || state.cashiers.get(s.cashier_id) || '-';
+
+async function loadCashierNames(sales) {
+  const ids = [...new Set(sales.map((s) => s.cashier_id).filter(Boolean))].filter((id) => !state.cashiers.has(id));
+  if (!ids.length) return;
+  try {
+    const { data } = await supabase.from('profiles').select('id, full_name').in('id', ids);
+    (data || []).forEach((p) => state.cashiers.set(p.id, p.full_name));
+  } catch (e) {
+    /* majina ni ya ziada, hayazuii dashboard */
+  }
+}
 
 function periodRange(key) {
   const now = new Date();
@@ -117,22 +160,32 @@ function summary(pairs) {
 }
 
 function statusBadge(s) {
+  if (isCreditSale(s)) return '<span class="badge badge-warning">Mkopo</span>';
   const st = s.payment_status || 'unpaid';
   if (st === 'paid') return '<span class="badge badge-success">Imelipwa</span>';
   if (st === 'partial') return '<span class="badge badge-warning">Imelipwa Kiasi</span>';
   return '<span class="badge badge-danger">Haijalipwa</span>';
 }
 
+// Namba ya risiti inayobofyeka na bidhaa inayobofyeka
+const receiptLink = (s, tag = 'span') =>
+  `<${tag} class="receipt-link" role="button" tabindex="0" data-sale-id="${esc(s.id)}">${esc(s.receipt_number)}</${tag}>`;
+
+const productLink = (id, name) =>
+  id && state.products.some((p) => p.id === id)
+    ? `<strong class="product-link" role="button" tabindex="0" data-product-id="${esc(id)}">${esc(name)}</strong>`
+    : `<strong>${esc(name)}</strong>`;
+
 function salesTable(list) {
   return table(
     ['Risiti', 'Tarehe', 'Mfanyakazi', 'Jumla', 'Imelipwa', 'Baki', 'Hali'],
     list.map((s) => [
-      `<strong>${esc(s.receipt_number)}</strong>`,
+      receiptLink(s, 'strong'),
       fmtDateTime(s.created_at),
-      esc(s.profiles?.full_name || '-'),
+      esc(cashierName(s)),
       money(s.total),
-      money(paidOf(s)),
-      money(balanceOf(s)),
+      money(paidShown(s)),
+      money(balanceShown(s)),
       statusBadge(s)
     ]),
     'Hakuna mauzo'
@@ -161,7 +214,7 @@ function payCardsHtml(fin) {
       amount = t.amount;
       count = t.count;
     }
-    const sub = d.key === 'credit' ? `${count} risiti zenye deni` : `${count} malipo`;
+    const sub = d.key === 'credit' ? `${count} risiti za mkopo` : `${count} malipo`;
     return statBox({
       key: `pay-${d.key}`,
       ic: d.ic,
@@ -192,7 +245,10 @@ function payCardsHtml(fin) {
 
 /* ---------- Ukurasa mkuu ---------- */
 export async function renderDashboard(root, user, profile) {
-  state = { products: [], todaySales: [], fin: null };
+  state = {
+    products: [], todaySales: [], recent: [], fin: null,
+    cashiers: new Map(), modal: null, modalStack: []
+  };
 
   root.innerHTML = `
     <div class="dashboard-container">
@@ -213,6 +269,14 @@ export async function renderDashboard(root, user, profile) {
         .dash-summary-row:last-child { border-bottom: none; }
         .dash-modal-body h4 { margin: 18px 0 8px; }
         .dash-modal-body .hint { color: #68786e; font-size: 13px; margin: 8px 0; }
+        .dash-toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+        .receipt-link, .product-link { color: #1456c0; cursor: pointer; font-weight: 700; }
+        .receipt-link:hover, .product-link:hover { text-decoration: underline; }
+        .receipt-link:focus-visible, .product-link:focus-visible { outline: 2px solid #1456c0; outline-offset: 2px; border-radius: 3px; }
+        .dash-receipt-head { text-align: center; margin-bottom: 14px; }
+        .dash-receipt-head h3 { margin: 0 0 4px; color: #0f3a8a; }
+        .dash-receipt-head div { color: #68786e; font-size: 13px; margin: 2px 0; }
+        .trend-svg { width: 100%; height: auto; display: block; }
       </style>
 
       <div class="dashboard-header">
@@ -289,6 +353,28 @@ export async function renderDashboard(root, user, profile) {
       <div class="dashboard-grid" style="margin-top: 24px;">
         <div class="dashboard-panel">
           <div class="panel-header">
+            <h3>${icon('trending-up', 18)} Mwenendo wa Mauzo</h3>
+            <span class="muted" id="trend-label">${PERIODS.today}</span>
+          </div>
+          <div id="sales-trend">
+            <div class="empty-state">Inapakia...</div>
+          </div>
+        </div>
+
+        <div class="dashboard-panel">
+          <div class="panel-header">
+            <h3>${icon('package', 18)} Bidhaa Zinazouzwa Zaidi</h3>
+            <span class="muted" id="top-label">${PERIODS.today}</span>
+          </div>
+          <div id="top-products">
+            <div class="empty-state">Inapakia...</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dashboard-grid" style="margin-top: 24px;">
+        <div class="dashboard-panel">
+          <div class="panel-header">
             <h3>${icon('trending-up', 18)} Mauzo ya Hivi Karibuni</h3>
             <a href="#sales" class="btn-link">Tazama Zote →</a>
           </div>
@@ -338,18 +424,39 @@ export async function renderDashboard(root, user, profile) {
   const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
   setText('current-date', new Date().toLocaleDateString('sw-TZ', options));
 
-  // Matukio
+  // Matukio (yote yanashughulikiwa hapa: vibox, risiti, bidhaa, vitufe)
+  const activate = (target) => {
+    const sale = target.closest('[data-sale-id]');
+    if (sale && container.contains(sale)) {
+      openReceipt(sale.dataset.saleId);
+      return true;
+    }
+    const prod = target.closest('[data-product-id]');
+    if (prod && container.contains(prod)) {
+      openProduct(prod.dataset.productId);
+      return true;
+    }
+    const act = target.closest('[data-action]');
+    if (act && container.contains(act)) {
+      if (act.dataset.action === 'back') goBack();
+      if (act.dataset.action === 'print-receipt') printReceipt();
+      return true;
+    }
+    const box = target.closest('[data-box]');
+    if (box && container.contains(box)) {
+      openBox(box.dataset.box);
+      return true;
+    }
+    return false;
+  };
+
   container.addEventListener('click', (e) => {
-    const box = e.target.closest('[data-box]');
-    if (box && container.contains(box)) openBox(box.dataset.box);
+    if (activate(e.target)) e.preventDefault();
   });
   container.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
-    const box = e.target.closest('[data-box]');
-    if (box) {
-      e.preventDefault();
-      openBox(box.dataset.box);
-    }
+    if (e.target.closest('button, select, input, a')) return;
+    if (activate(e.target)) e.preventDefault();
   });
   document.getElementById('dash-modal-close').addEventListener('click', closeModal);
   document.getElementById('dash-modal-cancel').addEventListener('click', closeModal);
@@ -369,22 +476,183 @@ export async function renderDashboard(root, user, profile) {
 }
 
 /* ---------- Dirisha la maelezo ---------- */
-function openModal(title, bodyHtml) {
+function setModalContent(title, bodyHtml) {
   const modal = document.getElementById('dash-modal');
   if (!modal) return;
+  state.modal = { title, html: bodyHtml };
   document.getElementById('dash-modal-title').textContent = title;
-  document.getElementById('dash-modal-body').innerHTML = bodyHtml;
+  const body = document.getElementById('dash-modal-body');
+  body.innerHTML = bodyHtml;
+  body.scrollTop = 0;
   modal.style.display = 'flex';
+}
+
+function openModal(title, bodyHtml, { child = false } = {}) {
+  if (child && state.modal) state.modalStack.push(state.modal);
+  else if (!child) state.modalStack = [];
+  setModalContent(title, bodyHtml);
+}
+
+function goBack() {
+  const prev = state.modalStack.pop();
+  if (prev) setModalContent(prev.title, prev.html);
+  else closeModal();
 }
 
 function closeModal() {
   const modal = document.getElementById('dash-modal');
   if (modal) modal.style.display = 'none';
+  state.modal = null;
+  state.modalStack = [];
 }
+
+const modalToolbar = (extra = '') =>
+  `<div class="dash-toolbar">${
+    state.modalStack.length
+      ? '<button type="button" class="btn btn-secondary btn-sm" data-action="back">← Rudi</button>'
+      : ''
+  }${extra}</div>`;
 
 function addError(msg) {
   const box = document.getElementById('dash-errors');
   if (box) box.insertAdjacentHTML('beforeend', `<div class="dash-note">${esc(msg)}</div>`);
+}
+
+/* ---------- Risiti na bidhaa ---------- */
+async function getSale(id) {
+  const cached = [...(state.fin?.sales || []), ...state.todaySales, ...state.recent].find((s) => s.id === id);
+  if (cached) return cached;
+  const { data, error } = await supabase.from('sales').select('*, profiles(full_name)').eq('id', id).single();
+  if (error) throw error;
+  return data;
+}
+
+async function openReceipt(saleId) {
+  openModal('Risiti', '<div class="empty-state">Inapakia risiti...</div>', { child: true });
+  try {
+    const sale = await getSale(saleId);
+    await loadCashierNames([sale]);
+
+    const [itemsRes, paymentsRes] = await Promise.all([
+      supabase.from('sale_items').select('*').eq('sale_id', saleId),
+      supabase.from('payments').select('*').eq('sale_id', saleId)
+    ]);
+    if (itemsRes.error) throw itemsRes.error;
+    if (paymentsRes.error) throw paymentsRes.error;
+    const items = itemsRes.data || [];
+    const payments = paymentsRes.data || [];
+
+    const total = num(sale.total);
+    const real = payments
+      .filter((p) => normalizeMethod(p.method) !== 'credit')
+      .reduce((t, p) => t + num(p.amount), 0);
+    let paid;
+    if (isCreditSale(sale)) paid = Math.min(real, total);
+    else paid = payments.length ? Math.min(real, total) : paidOf(sale);
+    const baki = Math.max(0, total - paid);
+
+    const itemsTable = table(
+      ['Bidhaa', 'Idadi', 'Bei', 'Jumla'],
+      items.map((it) => [
+        `<strong>${esc(it.product_name)}</strong>`,
+        String(num(it.quantity)),
+        money(it.unit_price),
+        `<strong>${money(num(it.line_total) || num(it.quantity) * num(it.unit_price))}</strong>`
+      ]),
+      'Hakuna bidhaa kwenye risiti hii'
+    );
+
+    const totals = summary([
+      ['Subtotal', money(sale.subtotal)],
+      ['Discount', money(sale.discount)],
+      ['Jumla', `<span style="font-size:18px;color:#1456c0;">${money(total)}</span>`],
+      ['Njia ya malipo', esc(methodLabel(sale.payment_method))],
+      [isCreditSale(sale) ? 'Kilicholipwa' : 'Kilichopokelewa', money(paid)],
+      [isCreditSale(sale) ? 'Kiasi cha mkopo' : 'Baki', money(baki), baki > 0 ? '#991b1b' : ''],
+      ['Hali', statusBadge(sale)]
+    ]);
+
+    const paymentsHtml = payments.length
+      ? '<h4>Malipo yaliyopokelewa</h4>' +
+        table(
+          ['Njia', 'Kiasi', 'Tarehe'],
+          payments.map((p) => [esc(methodLabel(p.method)), money(p.amount), fmtDateTime(p.created_at)])
+        )
+      : '';
+
+    const receipt = `
+      <div id="dash-receipt">
+        <div class="dash-receipt-head">
+          <h3>StationeryPro</h3>
+          <div>Risiti Namba: <strong>${esc(sale.receipt_number)}</strong></div>
+          <div>${fmtDateTime(sale.created_at)}</div>
+          <div>Mfanyakazi: ${esc(cashierName(sale))}</div>
+        </div>
+        ${itemsTable}
+        <div style="margin-top:14px;">${totals}</div>
+        ${paymentsHtml}
+      </div>`;
+
+    setModalContent(
+      `Risiti ${sale.receipt_number}`,
+      modalToolbar('<button type="button" class="btn btn-primary btn-sm" data-action="print-receipt">Print Risiti</button>') +
+        receipt
+    );
+  } catch (error) {
+    console.error('Receipt error:', error);
+    setModalContent('Risiti', modalToolbar() + `<div class="dash-note">Hitilafu: ${esc(error.message)}</div>`);
+  }
+}
+
+function printReceipt() {
+  const el = document.getElementById('dash-receipt');
+  if (!el) return;
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+  document.body.appendChild(iframe);
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(`<html><head><title>Risiti</title><style>
+    body { font-family: Arial, Helvetica, sans-serif; color: #183629; padding: 16px; max-width: 380px; margin: 0 auto; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 6px 4px; border-bottom: 1px dashed #cfd8d2; }
+    th { font-size: 11px; text-transform: uppercase; color: #68786e; }
+    h3, h4 { margin: 8px 0; }
+    .dash-receipt-head { text-align: center; margin-bottom: 12px; }
+    .dash-summary-row { display: flex; justify-content: space-between; padding: 4px 0; }
+    .badge { font-weight: 700; }
+  </style></head><body>${el.innerHTML}</body></html>`);
+  doc.close();
+  iframe.contentWindow.focus();
+  setTimeout(() => {
+    iframe.contentWindow.print();
+    setTimeout(() => iframe.remove(), 1500);
+  }, 250);
+}
+
+function openProduct(id) {
+  const p = state.products.find((x) => x.id === id);
+  if (!p) return;
+  openModal(p.name, '', { child: true });
+
+  const margin = num(p.selling_price) - num(p.cost_price);
+  const pct = num(p.cost_price) > 0 ? ` (${((margin / num(p.cost_price)) * 100).toFixed(0)}%)` : '';
+  const low = p.reorder_level != null && num(p.stock_quantity) <= num(p.reorder_level);
+
+  setModalContent(
+    p.name,
+    modalToolbar() +
+      summary([
+        ['Kategoria', esc(p.category || '-')],
+        ['Bei ya kununulia', money(p.cost_price)],
+        ['Bei ya kuuzia', money(p.selling_price)],
+        ['Faida kwa kipande', `${money(margin)}${pct}`, margin < 0 ? '#991b1b' : '#166534'],
+        ['Stock iliyopo', String(num(p.stock_quantity))],
+        ['Kiwango cha kuagiza tena', p.reorder_level != null ? String(num(p.reorder_level)) : '-'],
+        ['Hali ya stock', low ? '<span class="badge badge-warning">Stock Chini</span>' : '<span class="badge badge-success">OK</span>'],
+        ['Thamani ya stock (kwa bei ya kununulia)', money(num(p.cost_price) * num(p.stock_quantity))]
+      ])
+  );
 }
 
 /* ---------- Data ya leo, bidhaa, mauzo ya karibuni ---------- */
@@ -407,6 +675,8 @@ async function loadDashboardData() {
           .range(a, b)
       )
     ).filter((s) => !isCancelled(s));
+
+    await loadCashierNames(all);
 
     const todaySales = all.filter((s) => new Date(s.created_at) >= todayStart);
     const yesterdaySales = all.filter((s) => new Date(s.created_at) < todayStart);
@@ -440,7 +710,7 @@ async function loadDashboardData() {
     const { data, error } = await supabase.from('products').select('*').order('name');
     if (error) throw error;
 
-    const products = (data || []).filter((p) => p.is_active !== false);
+    const products = (data || []).filter((p) => p.is_active !== false && !p.is_service);
     state.products = products;
     setText('total-products', String(products.length));
 
@@ -459,7 +729,7 @@ async function loadDashboardData() {
           (p) => `
           <div class="low-stock-item">
             <div class="low-stock-info">
-              <strong>${esc(p.name || 'Bidhaa')}</strong>
+              ${productLink(p.id, p.name || 'Bidhaa')}
               <small>Stock: ${num(p.stock_quantity)} / Min: ${num(p.reorder_level)}</small>
             </div>
             <span class="badge badge-warning">Chini</span>
@@ -481,24 +751,29 @@ async function loadDashboardData() {
       .limit(5);
     if (error) throw error;
 
+    state.recent = recentSales || [];
     const recentContainer = document.getElementById('recent-sales');
     if (recentSales && recentSales.length > 0) {
       recentContainer.innerHTML = recentSales
-        .map(
-          (s) => `
+        .map((s) => {
+          const credit = isCreditSale(s);
+          const paidBadge = credit
+            ? '<span class="badge badge-warning">Mkopo</span>'
+            : `<span class="badge ${s.payment_status === 'paid' ? 'badge-success' : 'badge-warning'}">${
+                s.payment_status === 'paid' ? 'Imelipwa' : 'Inasubiri'
+              }</span>`;
+          return `
           <div class="recent-sale-item">
             <div class="recent-sale-info">
-              <strong>${esc(s.receipt_number)}</strong>
+              ${receiptLink(s, 'strong')}
               <small>${fmtDateTime(s.created_at)}</small>
             </div>
             <div class="recent-sale-amount">
               <strong>${money(s.total)}</strong>
-              <span class="badge ${s.payment_status === 'paid' ? 'badge-success' : 'badge-warning'}">
-                ${s.payment_status === 'paid' ? 'Imelipwa' : 'Inasubiri'}
-              </span>
+              ${paidBadge}
             </div>
-          </div>`
-        )
+          </div>`;
+        })
         .join('');
     } else {
       recentContainer.innerHTML = '<div class="empty-state">Hakuna mauzo ya hivi karibuni</div>';
@@ -507,6 +782,96 @@ async function loadDashboardData() {
     console.error('Dashboard recent sales error:', error);
     addError(`Mauzo ya hivi karibuni: ${error.message}`);
   }
+}
+
+/* ---------- Mwenendo wa mauzo (chati) na bidhaa bora ---------- */
+function renderTrend(f, key, from) {
+  const el = document.getElementById('sales-trend');
+  if (!el) return;
+
+  let buckets = [];
+  if (key === 'today') {
+    buckets = Array.from({ length: 24 }, (_, h) => ({ label: String(h), full: `Saa ${h}:00`, v: 0 }));
+    f.sales.forEach((s) => {
+      buckets[new Date(s.created_at).getHours()].v += num(s.total);
+    });
+  } else if (key === 'year') {
+    buckets = MONTHS_SW.map((m) => ({ label: m, full: m, v: 0 }));
+    f.sales.forEach((s) => {
+      buckets[new Date(s.created_at).getMonth()].v += num(s.total);
+    });
+  } else {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const n = Math.max(1, Math.round((today - from) / 86400000) + 1);
+    buckets = Array.from({ length: n }, (_, i) => {
+      const d = addDays(from, i);
+      return { label: String(d.getDate()), full: fmtDate(d), v: 0 };
+    });
+    f.sales.forEach((s) => {
+      const idx = Math.floor((new Date(s.created_at) - from) / 86400000);
+      if (idx >= 0 && idx < n) buckets[idx].v += num(s.total);
+    });
+  }
+
+  const max = Math.max(0, ...buckets.map((b) => b.v));
+  if (max <= 0) {
+    el.innerHTML = '<div class="empty-state">Hakuna mauzo kwa kipindi hiki</div>';
+    return;
+  }
+
+  const W = 640, H = 210, padL = 8, padR = 8, padT = 22, padB = 28;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+  const step = chartW / buckets.length;
+  const bw = Math.max(3, step * 0.62);
+  const every = Math.ceil(buckets.length / 12);
+
+  const bars = buckets
+    .map((b, i) => {
+      const x = padL + i * step + (step - bw) / 2;
+      const h = (b.v / max) * chartH;
+      const y = padT + chartH - h;
+      const bar = b.v > 0
+        ? `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="#1456c0"><title>${esc(b.full)}: ${esc(money(b.v))}</title></rect>`
+        : '';
+      const label = i % every === 0
+        ? `<text x="${(x + bw / 2).toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="11" fill="#68786e">${esc(b.label)}</text>`
+        : '';
+      return bar + label;
+    })
+    .join('');
+
+  el.innerHTML = `
+    <svg class="trend-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Mwenendo wa mauzo">
+      <text x="${padL}" y="12" font-size="11" fill="#68786e">Juu: ${esc(money(max))}</text>
+      <line x1="${padL}" y1="${padT + chartH}" x2="${W - padR}" y2="${padT + chartH}" stroke="#e1eae4" stroke-width="1"/>
+      ${bars}
+    </svg>`;
+}
+
+function renderTopProducts(f) {
+  const el = document.getElementById('top-products');
+  if (!el) return;
+  const rows = productProfitRows(f.items).sort((a, b) => b.rev - a.rev).slice(0, 5);
+  if (!rows.length) {
+    el.innerHTML = '<div class="empty-state">Hakuna mauzo kwa kipindi hiki</div>';
+    return;
+  }
+  el.innerHTML = rows
+    .map(
+      (r) => `
+      <div class="recent-sale-item">
+        <div class="recent-sale-info">
+          ${productLink(r.id, r.name)}
+          <small>Zimeuzwa: ${r.qty}</small>
+        </div>
+        <div class="recent-sale-amount">
+          <strong>${money(r.rev)}</strong>
+        </div>
+      </div>`
+    )
+    .join('');
 }
 
 /* ---------- Fedha: faida, hasara, matumizi, njia za malipo ---------- */
@@ -519,6 +884,8 @@ async function loadFinance() {
 
   ['fin-sales', 'fin-profit', 'fin-loss', 'fin-expenses'].forEach((id) => setText(id, '...'));
   setText('fin-period-label', label);
+  setText('trend-label', label);
+  setText('top-label', label);
 
   try {
     const sales = (
@@ -532,6 +899,8 @@ async function loadFinance() {
           .range(a, b)
       )
     ).filter((s) => !isCancelled(s));
+
+    await loadCashierNames(sales);
 
     const ids = sales.map((s) => s.id);
     const [items, payments, expenses] = await Promise.all([
@@ -556,6 +925,7 @@ async function loadFinance() {
 
     // Malipo: tumia table ya payments kama safu zipo; vinginevyo tumia
     // payment_method ya sales na kiasi kilichopokelewa.
+    // Mauzo ya njia "Mkopo" hayaingii kwenye njia nyingine: yanakwenda kwenye kibox cha Mkopo.
     const paymentsBySale = new Map();
     payments.forEach((p) => {
       if (!paymentsBySale.has(p.sale_id)) paymentsBySale.set(p.sale_id, []);
@@ -567,17 +937,16 @@ async function loadFinance() {
       const rows = paymentsBySale.get(s.id);
       if (rows && rows.length) {
         rows.forEach((p) => {
-          const m = String(p.method || '').toLowerCase();
+          const m = normalizeMethod(p.method);
           if (m === 'credit') return;
           payRows.push({ sale_id: s.id, method: m || 'other', amount: num(p.amount), created_at: p.created_at || s.created_at });
         });
-      } else {
+      } else if (!isCreditSale(s)) {
         const paid = paidOf(s);
         if (paid > 0) {
-          const m = String(s.payment_method || '').toLowerCase();
           payRows.push({
             sale_id: s.id,
-            method: !m || m === 'credit' ? 'other' : m,
+            method: normalizeMethod(s.payment_method) || 'other',
             amount: paid,
             created_at: s.created_at
           });
@@ -594,16 +963,29 @@ async function loadFinance() {
       target.count += 1;
     });
 
-    const creditSales = sales.filter((s) => balanceOf(s) > 0);
+    // Mkopo: mauzo yote ya njia ya mkopo (jumla ya risiti), pamoja na baki ya
+    // mauzo mengine yaliyolipwa kiasi tu.
+    const paidBySale = new Map();
+    payRows.forEach((r) => paidBySale.set(r.sale_id, (paidBySale.get(r.sale_id) || 0) + r.amount));
+
+    const creditRows = sales
+      .map((s) => {
+        const creditSale = isCreditSale(s);
+        const amount = creditSale
+          ? Math.max(0, num(s.total) - (paidBySale.get(s.id) || 0))
+          : balanceOf(s);
+        return { sale: s, amount, creditSale };
+      })
+      .filter((r) => r.amount > 0);
     const credit = {
-      amount: creditSales.reduce((t, s) => t + balanceOf(s), 0),
-      count: creditSales.length
+      amount: creditRows.reduce((t, r) => t + r.amount, 0),
+      count: creditRows.length
     };
 
     state.fin = {
       label, sales, items, payRows, expenses,
       salesById: new Map(sales.map((s) => [s.id, s])),
-      revenue, cogs, gross, expensesTotal, net, payTotals, other, credit, creditSales
+      revenue, cogs, gross, expensesTotal, net, payTotals, other, credit, creditRows
     };
 
     setText('fin-sales', money(revenue));
@@ -615,10 +997,17 @@ async function loadFinance() {
 
     const grid = document.getElementById('pay-grid');
     if (grid) grid.innerHTML = payCardsHtml(state.fin);
+
+    renderTrend(state.fin, key, from);
+    renderTopProducts(state.fin);
   } catch (error) {
     console.error('Dashboard finance error:', error);
     state.fin = null;
     ['fin-sales', 'fin-profit', 'fin-loss', 'fin-expenses'].forEach((id) => setText(id, 'TSh 0'));
+    const trend = document.getElementById('sales-trend');
+    const top = document.getElementById('top-products');
+    if (trend) trend.innerHTML = '<div class="empty-state">Data haikupatikana</div>';
+    if (top) top.innerHTML = '<div class="empty-state">Data haikupatikana</div>';
     addError(`Fedha: ${error.message}`);
   }
 }
@@ -628,7 +1017,8 @@ function productProfitRows(items) {
   const map = new Map();
   items.forEach((it) => {
     const k = it.product_name || '-';
-    const row = map.get(k) || { name: k, qty: 0, rev: 0, cost: 0 };
+    const row = map.get(k) || { id: null, name: k, qty: 0, rev: 0, cost: 0 };
+    if (!row.id && it.product_id) row.id = it.product_id;
     row.qty += num(it.quantity);
     row.rev += num(it.line_total) || num(it.quantity) * num(it.unit_price);
     row.cost += num(it.quantity) * num(it.unit_cost);
@@ -675,6 +1065,7 @@ function openBox(key) {
       openModal(
         key === 'today-sales' ? 'Mauzo ya Leo' : 'Idadi ya Mauzo ya Leo',
         summary([['Jumla ya mauzo', money(sum(list, 'total'))], ['Idadi ya risiti', String(list.length)]]) +
+          '<p class="hint">Bofya namba ya risiti kuona risiti nzima.</p>' +
           salesTable(list)
       );
       break;
@@ -682,19 +1073,27 @@ function openBox(key) {
 
     case 'products': {
       const list = state.products;
+      const costValue = list.reduce((t, p) => t + num(p.cost_price) * num(p.stock_quantity), 0);
+      const sellValue = list.reduce((t, p) => t + num(p.selling_price) * num(p.stock_quantity), 0);
       openModal(
         'Bidhaa Zote',
-        table(
-          ['Jina', 'Kategoria', 'Stock', 'Bei ya kununulia', 'Bei ya kuuzia'],
-          list.map((p) => [
-            `<strong>${esc(p.name)}</strong>`,
-            esc(p.category || '-'),
-            String(num(p.stock_quantity)),
-            money(p.cost_price),
-            money(p.selling_price)
-          ]),
-          'Hakuna bidhaa'
-        )
+        summary([
+          ['Idadi ya bidhaa', String(list.length)],
+          ['Thamani ya stock (kwa bei ya kununulia)', money(costValue)],
+          ['Thamani ya stock (kwa bei ya kuuzia)', money(sellValue)]
+        ]) +
+          '<p class="hint">Bofya jina la bidhaa kuona taarifa zake.</p>' +
+          table(
+            ['Jina', 'Kategoria', 'Stock', 'Bei ya kununulia', 'Bei ya kuuzia'],
+            list.map((p) => [
+              productLink(p.id, p.name),
+              esc(p.category || '-'),
+              String(num(p.stock_quantity)),
+              money(p.cost_price),
+              money(p.selling_price)
+            ]),
+            'Hakuna bidhaa'
+          )
       );
       break;
     }
@@ -708,7 +1107,7 @@ function openBox(key) {
         table(
           ['Jina', 'Stock iliyopo', 'Kiwango cha chini', 'Upungufu'],
           list.map((p) => [
-            `<strong>${esc(p.name)}</strong>`,
+            productLink(p.id, p.name),
             String(num(p.stock_quantity)),
             String(num(p.reorder_level)),
             String(Math.max(0, num(p.reorder_level) - num(p.stock_quantity)))
@@ -724,6 +1123,7 @@ function openBox(key) {
       openModal(
         `Mauzo - ${f.label}`,
         summary([['Jumla ya mauzo', money(f.revenue)], ['Idadi ya risiti', String(f.sales.length)]]) +
+          '<p class="hint">Bofya namba ya risiti kuona risiti nzima.</p>' +
           salesTable(f.sales)
       );
       break;
@@ -732,7 +1132,7 @@ function openBox(key) {
     case 'fin-profit': {
       if (!f) return needFin();
       const rows = productProfitRows(f.items).map((r) => [
-        `<strong>${esc(r.name)}</strong>`,
+        productLink(r.id, r.name),
         String(r.qty),
         money(r.rev),
         money(r.cost),
@@ -790,9 +1190,21 @@ function openBox(key) {
 
       if (method === 'credit') {
         openModal(
-          `Mkopo (Baki) - ${f.label}`,
-          summary([['Jumla ya baki', money(f.credit.amount)], ['Risiti zenye deni', String(f.credit.count)]]) +
-            salesTable(f.creditSales)
+          `Mkopo - ${f.label}`,
+          summary([['Jumla ya mikopo', money(f.credit.amount)], ['Idadi ya risiti', String(f.credit.count)]]) +
+            '<p class="hint">Bofya namba ya risiti kuona risiti nzima.</p>' +
+            table(
+              ['Risiti', 'Tarehe', 'Mfanyakazi', 'Jumla ya risiti', 'Aina', 'Kiasi cha mkopo'],
+              f.creditRows.map((r) => [
+                receiptLink(r.sale, 'strong'),
+                fmtDateTime(r.sale.created_at),
+                esc(cashierName(r.sale)),
+                money(r.sale.total),
+                r.creditSale ? 'Mauzo ya mkopo' : 'Baki ya malipo kiasi',
+                `<strong>${money(r.amount)}</strong>`
+              ]),
+              'Hakuna mikopo kwa kipindi hiki'
+            )
         );
         return;
       }
@@ -805,14 +1217,15 @@ function openBox(key) {
       openModal(
         `${def ? def.label : 'Nyingine'} - ${f.label}`,
         summary([['Jumla', money(total)], ['Idadi ya malipo', String(list.length)]]) +
+          '<p class="hint">Bofya namba ya risiti kuona risiti nzima.</p>' +
           table(
             ['Risiti', 'Tarehe', 'Mfanyakazi', 'Kiasi'],
             list.map((r) => {
-              const s = f.salesById.get(r.sale_id) || {};
+              const s = f.salesById.get(r.sale_id);
               return [
-                `<strong>${esc(s.receipt_number || '-')}</strong>`,
+                s ? receiptLink(s, 'strong') : '<strong>-</strong>',
                 fmtDateTime(r.created_at),
-                esc(s.profiles?.full_name || '-'),
+                s ? esc(cashierName(s)) : '-',
                 `<strong>${money(r.amount)}</strong>`
               ];
             }),
