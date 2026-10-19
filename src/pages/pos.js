@@ -1,11 +1,14 @@
 import { supabase } from '../lib/supabase.js';
 
+// ✅ WEKA HIVI KAMA GLOBAL VARIABLES
 let cart = [];
 let products = [];
 let businessInfo = {}; 
+let currentSaleData = null; // ✅ Hifadhi data za mauzo ya sasa
 
 export async function renderPOS(root, user, profile) {
   cart = [];
+  currentSaleData = null; // Reset
   
   const { data: bs } = await supabase
     .from('business_settings')
@@ -358,7 +361,7 @@ async function completeSale() {
 
     if (error) throw error;
 
-    // ✅ MAREKEBISHO: Tumia try-catch badala ya .catch()
+    // Hifadhi VAT kwenye sale
     if (vatPercent > 0 && data?.sale_id) {
       try {
         await supabase.from('sales').update({ 
@@ -369,6 +372,18 @@ async function completeSale() {
         console.log('VAT save skipped:', e);
       }
     }
+
+    // ✅ HIFADHI DATA ZA MAUZO KWA AJILI YA WHATSAPP
+    currentSaleData = {
+      cart: [...cart],
+      total,
+      amountPaid,
+      discount,
+      paymentMethod,
+      vatPercent,
+      vatAmount,
+      receiptNumber: data.receipt_number
+    };
 
     showReceipt(data, cart, total, amountPaid, discount, paymentMethod, vatPercent, vatAmount);
 
@@ -518,25 +533,31 @@ window.printReceipt = () => {
   }, 250);
 };
 
-// ✅ MAREKEBISHO: WhatsApp message imeboreshwa kuwa na muonekano mzuri
+// ✅ MAREKEBISHO: Tumia currentSaleData badala ya cart
 window.shareWhatsApp = () => {
+  // ✅ Angalia kama kuna data za mauzo
+  if (!currentSaleData || !currentSaleData.cart || currentSaleData.cart.length === 0) {
+    alert('Hakuna data za mauzo za kutuma.');
+    return;
+  }
+
   const shopName = businessInfo.business_name || 'StationeryPro';
-  const receiptNumber = document.querySelector('#receipt-content span[style*="font-weight: 700"]')?.textContent || '';
+  const receiptNumber = currentSaleData.receiptNumber || 'N/A';
   const date = new Date().toLocaleString('sw-TZ');
-  const totalText = document.querySelector('#receipt-content div[style*="font-size: 20px"] span:last-child')?.textContent || '0';
+  const totalText = window.money(currentSaleData.total);
   
   // ✅ Muonekano mzuri wa text kwa WhatsApp
   let message = `━━━━━━━━━━━━━━━━━━━\n`;
-  message += `🧾 *${shopName}*\n`;
+  message += ` *${shopName}*\n`;
   message += `━━━━━━━━━━━━━━━━━━━\n`;
   message += `📋 ${receiptNumber}\n`;
-  message += `📅 ${date}\n`;
+  message += ` ${date}\n`;
   message += `━━━━━━━━━━━━━━━━━━━\n\n`;
   message += `*VILIVYONUNULIWA:*\n`;
   message += `───────────────────\n`;
   
-  cart.forEach(item => {
-    message += `️ *${item.name}*\n`;
+  currentSaleData.cart.forEach(item => {
+    message += `▪️ *${item.name}*\n`;
     message += `   ${item.quantity} × ${window.money(item.price)}\n`;
     message += `   = *${window.money(item.price * item.quantity)}*\n\n`;
   });
