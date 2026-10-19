@@ -393,7 +393,11 @@ async function completeSale() {
     renderCart();
     await loadProducts();
 
-  } catch (error) {
+    } catch (error) {
+    // HII NDIO MPYA: Inatuma error kwenda database yako
+    window.logError(error, 'POS - Complete Sale');
+    
+    // Hizi ni za kawaida za kuonyesha user
     console.error('Sale error:', error);
     message.textContent = error.message || 'Imeshindikana kukamilisha mauzo.';
     message.className = 'form-message error';

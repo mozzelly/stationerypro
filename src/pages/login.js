@@ -52,14 +52,24 @@ export function renderLogin(root) {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
 
-      // Check if user is approved
-      const { data: profile } = await supabase
+      // ✅ Check profaili (Tumia maybeSingle ili kuepuka error ya "Cannot coerce")
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('is_approved, active, role')
         .eq('id', data.user.id)
-        .single();
+        .maybeSingle();
 
-      if (!profile || !profile.is_approved) {
+      if (profileError || !profile) {
+        await supabase.auth.signOut();
+        errorBox.textContent = 'Tatizo la profaili. Wasiliana na usimamizi.';
+        errorBox.style.display = 'block';
+        button.disabled = false;
+        button.textContent = 'Ingia';
+        return;
+      }
+
+      // ✅ ✅ ✅ MAREKEBISHO MAKUBWA HAPA: Zuia tu WAMILIKI (Owners) ambao hawaja-approve ✅ ✅ ✅
+      if (profile.role === 'owner' && profile.is_approved === false) {
         await supabase.auth.signOut();
         errorBox.textContent = 'Akaunti yako bado haijakubaliwa na Developer. Subiri uthibitisho.';
         errorBox.style.display = 'block';
@@ -67,6 +77,8 @@ export function renderLogin(root) {
         button.textContent = 'Ingia';
         return;
       }
+
+      // Kama ni mfanyakazi/cashier, wataruhusiwa kuingia moja kwa moja (hawazuiwi na is_approved)
 
       if (!profile.active) {
         await supabase.auth.signOut();
@@ -81,7 +93,7 @@ export function renderLogin(root) {
       
     } catch (error) {
       console.error('Login error:', error);
-      errorBox.textContent = error.message || 'Imeshindikana kuingia.';
+      errorBox.textContent = error.message || 'Imeshindikana kuingia. Hakikisha email na nenosiri ni sahihi.';
       errorBox.style.display = 'block';
     } finally {
       button.disabled = false;
@@ -201,7 +213,7 @@ function renderSignup(root) {
 
       // 2. Create profile na business settings explicitly
       if (authData.user) {
-        // HAKIKISHA: role ni 'owner' na is_approved ni 'false'
+        // ✅ HAKIKISHA: role ni 'owner' na is_approved ni 'false' (Developer ata-approve)
         const { error: profileError } = await supabase
           .from('profiles')
           .upsert({
@@ -210,7 +222,7 @@ function renderSignup(root) {
             email: email,
             phone: phone,
             role: 'owner',
-            is_approved: false,
+            is_approved: false, // Mmiliki anasubiri wewe
             active: true
           }, {
             onConflict: 'id'

@@ -9,14 +9,19 @@ export async function getSession() {
 
 // Hii inatafutwa na main.js na login.js
 export async function getProfile(userId) {
-  // Kumbuka: Badilisha 'profiles' iwe 'users' kama jedwali lako linaitwa users
+  // ✅ MAREKEBISHO: Tumia .maybeSingle() badala ya .single()
+  // Hii inazuia error kama profaili haipo au RLS inazuia
   const { data, error } = await supabase
     .from('profiles') 
     .select('*')
     .eq('id', userId)
-    .single();
+    .maybeSingle(); // ✅ Salama zaidi
 
-  if (error) throw error;
+  if (error) {
+    console.error('Error fetching profile:', error);
+    return null; // Rudisha null badala ya ku-crash mfumo
+  }
+  
   return data;
 }
 

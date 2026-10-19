@@ -30,6 +30,7 @@ const commonProducts = [
 // Bidhaa na huduma zote (zinatumika kutambua zinazojirudia wakati wa kuongeza)
 let productCache = [];
 let activeTab = 'products'; // 'products' au 'services'
+let currentUser = null; // ✅ Hifadhi user kwa ajili ya owner_id
 
 const num = (v) => Number(v) || 0;
 const round3 = (v) => Math.round((Number(v) || 0) * 1000) / 1000;
@@ -45,6 +46,9 @@ const readFile = (file) =>
   });
 
 export async function renderProducts(root, user, profile) {
+  // ✅ HIFADHI USER KWA AJILI YA OWNER_ID
+  currentUser = user;
+  
   root.innerHTML = `
     <div class="page-header">
       <h1>Bidhaa na Huduma</h1>
@@ -237,7 +241,8 @@ function setTab(tab) {
 }
 
 async function refreshProductCache() {
-  const { data } = await supabase.from('products').select('*');
+  if (!currentUser) return;
+  const { data } = await supabase.from('products').select('*').eq('owner_id', currentUser.id);
   productCache = data || [];
 }
 
@@ -343,12 +348,19 @@ function setupAutocomplete() {
 
 // Inapakia bidhaa na huduma, kisha kuzigawa kwenye majedwali mawili
 async function loadProducts() {
+  if (!currentUser) return;
+  
   const search = document.getElementById('search-product')?.value || '';
   const categoryId = document.getElementById('filter-category')?.value || '';
   const tbody = document.getElementById('products-body');
   const servicesBody = document.getElementById('services-body');
 
-  let query = supabase.from('products').select('*, categories(name)').order('created_at', { ascending: false });
+  let query = supabase
+    .from('products')
+    .select('*, categories(name)')
+    .eq('owner_id', currentUser.id) // ✅ CHUJA KWA OWNER_ID
+    .order('created_at', { ascending: false });
+    
   if (search) query = query.or(`name.ilike.%${search}%,sku.ilike.%${search}%`);
   if (categoryId) query = query.eq('category_id', categoryId);
 
@@ -510,6 +522,11 @@ async function adjustStock(productId, qty) {
 }
 
 async function saveProduct() {
+  if (!currentUser) {
+    alert('Tafadhali login tena');
+    return;
+  }
+  
   const form = document.getElementById('product-form');
   const message = document.getElementById('form-message');
   const button = form.querySelector('button[type="submit"]');
@@ -566,9 +583,11 @@ async function saveProduct() {
         if (result.error) { showError(result.error.message); return; }
       }
     } else {
-      // Bidhaa mpya: stock ya sasa = ulichopokea (0 kama hakuna)
+      // ✅ Bidhaa mpya: stock ya sasa = ulichopokea (0 kama hakuna)
+      // ✅ ONGEZA owner_id HAPA!
       const result = await supabase.from('products').insert([{
         ...baseData,
+        owner_id: currentUser.id,  // ✅ HII NDIO ILIKUWA INAKOSEKANA!
         barcode_image: barcodeDataUrl,
         initial_stock: received,
         stock_quantity: received
@@ -631,6 +650,11 @@ function closeServiceModal() {
 }
 
 async function saveService() {
+  if (!currentUser) {
+    alert('Tafadhali login tena');
+    return;
+  }
+  
   const form = document.getElementById('service-form');
   const message = document.getElementById('service-form-message');
   const button = form.querySelector('button[type="submit"]');
@@ -669,6 +693,7 @@ async function saveService() {
         .update({ name, category_id: categoryId, selling_price: price })
         .eq('id', editingId);
     } else {
+      // ✅ Huduma mpya: ONGEZA owner_id HAPA!
       result = await supabase.from('products').insert([{
         name,
         category_id: categoryId,
@@ -678,7 +703,8 @@ async function saveService() {
         stock_quantity: 0,
         initial_stock: 0,
         reorder_level: 0,
-        is_service: true
+        is_service: true,
+        owner_id: currentUser.id  // ✅ HII NA HAPA INAHITAJIKA!
       }]);
     }
 

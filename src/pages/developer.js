@@ -4,7 +4,7 @@ import {
   table, summary, createDetailModal, downloadCsv
 } from '../lib/shared.js';
 
-const DEVELOPER_EMAIL = 'mussaelly1235@gmail.com';
+const DEVELOPER_EMAIL = import.meta.env.VITE_DEV_EMAIL || 'mussaelly1235@gmail.com';
 const APP_URL = 'https://mozzelly.github.io/stationerypro/';
 const DAY = 86400000;
 
@@ -27,6 +27,102 @@ const EXTRA_ICONS = {
 function iconx(name, size = 24) {
   if (!EXTRA_ICONS[name]) return baseIcon(name, size);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${EXTRA_ICONS[name]}</svg>`;
+}
+
+/* ---------- Mitindo na animation za Developer Dashboard ---------- */
+function ensureDevStyles() {
+  if (document.getElementById('dev-anim-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'dev-anim-styles';
+  s.textContent = `
+    @keyframes devRise   { from { opacity:0; transform: translateY(34px) scale(.9) rotateX(12deg); } to { opacity:1; transform:none; } }
+    @keyframes devSlide  { from { opacity:0; transform: translateX(-28px); } to { opacity:1; transform:none; } }
+    @keyframes devRow    { from { opacity:0; transform: translateX(-18px); } to { opacity:1; transform:none; } }
+    @keyframes devShimmer{ 0% { background-position:-600px 0; } 100% { background-position:600px 0; } }
+    @keyframes devPulse  { 0% { box-shadow:0 0 0 0 rgba(245,158,11,.65); } 70% { box-shadow:0 0 0 14px rgba(245,158,11,0); } 100% { box-shadow:0 0 0 0 rgba(245,158,11,0); } }
+    @keyframes devFloat  { 0%,100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-5px) rotate(-6deg); } }
+    @keyframes devPop    { from { opacity:0; transform: translateY(30px) scale(.9); } to { opacity:1; transform:none; } }
+    @keyframes devFade   { from { opacity:0; } to { opacity:1; } }
+    @keyframes devSpin   { to { transform: rotate(360deg); } }
+    @keyframes devBar    { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+    .developer-container { perspective: 1200px; }
+    .developer-container .page-header { animation: devSlide .6s cubic-bezier(.2,.8,.2,1) both; }
+
+    /* Vibox */
+    .developer-container .stat-card {
+      position: relative; overflow: hidden; cursor: pointer;
+      transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s ease;
+    }
+    .developer-container .stat-card::after {
+      content: ''; position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.7) 50%, transparent 70%);
+      transform: translateX(-130%); transition: transform .9s ease;
+    }
+    .developer-container .stat-card:hover { transform: translateY(-8px) scale(1.03); box-shadow: 0 20px 44px rgba(16,66,160,.22); }
+    .developer-container .stat-card:hover::after { transform: translateX(130%); }
+    .developer-container .stat-card:hover .stat-icon { animation: devFloat 1.1s ease-in-out infinite; }
+    .developer-container .stat-card:active { transform: scale(.96); }
+    .developer-container .stat-card:focus-visible { outline: 3px solid #1d6fe0; outline-offset: 3px; }
+    .developer-container .stat-card.pulse .stat-icon { animation: devPulse 1.8s infinite; }
+    .developer-container .enter .stat-card {
+      animation: devRise .75s cubic-bezier(.2,.9,.3,1.1) both;
+      animation-delay: calc(var(--i, 0) * 90ms);
+    }
+
+    /* Vichwa vya sehemu */
+    .developer-container .ui-section {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 12px; margin: 34px 0 14px;
+    }
+    .developer-container .ui-section h2 { position: relative; padding-bottom: 8px; }
+    .developer-container .ui-section h2::after {
+      content: ''; position: absolute; left: 0; bottom: 0; width: 56px; height: 3px; border-radius: 3px;
+      background: linear-gradient(90deg, #1d6fe0, #7c3aed); transform-origin: left;
+      animation: devBar .8s .3s cubic-bezier(.2,.8,.2,1) both;
+    }
+    .developer-container .enter .ui-section { animation: devSlide .6s cubic-bezier(.2,.8,.2,1) both; animation-delay: .55s; }
+
+    /* Jedwali */
+    .developer-container tbody tr { transition: background .2s ease, box-shadow .2s ease; }
+    .developer-container tbody tr:hover { background: #f1f6ff; box-shadow: inset 4px 0 0 #1d6fe0; }
+    .developer-container .enter tbody tr { animation: devRow .5s cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(var(--r, 0) * 60ms + .6s); }
+
+    /* Vitufe */
+    .developer-container .btn { transition: transform .2s ease, box-shadow .2s ease, filter .2s ease; }
+    .developer-container .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(0,0,0,.15); filter: brightness(1.04); }
+    .developer-container .btn:active { transform: scale(.94); }
+    #dev-refresh.spin svg { animation: devSpin .8s linear infinite; }
+
+    /* Kisanduku cha kutafuta */
+    .dev-search {
+      width: 100%; max-width: 340px; box-sizing: border-box;
+      padding: 11px 14px 11px 42px; margin: 0;
+      border: 1.5px solid #d6e2f5; border-radius: 12px;
+      background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E") no-repeat 14px center;
+      font-family: inherit; font-size: 14px; line-height: 1.4; color: #0f2a5c;
+      outline: none; transition: border-color .25s ease, box-shadow .25s ease, max-width .4s cubic-bezier(.2,.8,.2,1);
+    }
+    .dev-search::placeholder { color: #8aa0c2; }
+    .dev-search:focus { border-color: #1d6fe0; box-shadow: 0 0 0 4px rgba(29,111,224,.16); max-width: 440px; }
+
+    /* Skeleton ya kupakia */
+    .dev-skel {
+      height: 128px; border-radius: 16px;
+      background: linear-gradient(90deg, #eaf0fb 25%, #f8faff 50%, #eaf0fb 75%);
+      background-size: 1200px 100%; animation: devShimmer 1.4s infinite linear;
+    }
+
+    /* Madirisha */
+    .modal-overlay { animation: devFade .25s ease; }
+    .modal-overlay .modal { animation: devPop .4s cubic-bezier(.2,.9,.3,1.15); }
+
+    @media (prefers-reduced-motion: reduce) {
+      .developer-container *, .developer-container *::after,
+      .modal-overlay, .modal-overlay .modal { animation: none !important; transition: none !important; }
+    }
+  `;
+  document.head.appendChild(s);
 }
 
 /* ---------- Mipango ---------- */
@@ -105,7 +201,8 @@ function messageFor(p, shop) {
 let ROOT = null;
 let MODAL = null;
 let USER = null;
-const st = { profiles: [], shops: new Map(), stats: new Map(), statsOk: true, settings: {}, q: '' };
+let firstPaint = true;
+const st = { profiles: [], shops: new Map(), stats: new Map(), statsOk: true, settings: {}, q: '', prev: {} };
 
 const $ = (sel) => ROOT.querySelector(sel);
 const shopOfOwner = (id) => st.shops.get(id) || {};
@@ -148,13 +245,14 @@ function actionsHtml(p) {
 /* ---------- Data ---------- */
 async function loadAll() {
   const [pRes, bRes, sRes, setRes] = await Promise.all([
-    supabase.from('profiles').select('*').in('role', ['owner', 'cashier']).order('created_at', { ascending: false }),
+    supabase.from('profiles').select('*').in('role', ['owner', 'cashier', 'employee']).order('created_at', { ascending: false }),
     supabase.from('business_settings').select('*'),
     supabase.rpc('developer_owner_stats'),
     supabase.from('system_settings').select('key, value')
   ]);
   if (pRes.error) throw pRes.error;
-  st.profiles = pRes.data || [];
+  // Usimuonyeshe akaunti yako mwenyewe ya Developer kwenye orodha ya wateja
+  st.profiles = (pRes.data || []).filter((p) => p.id !== USER.id);
   st.shops = new Map((bRes.data || []).map((b) => [b.owner_id, b]));
   st.statsOk = !sRes.error;
   st.stats = new Map((sRes.data || []).map((s) => [s.o_id, s]));
@@ -163,7 +261,7 @@ async function loadAll() {
 
 function derive() {
   const owners = st.profiles.filter((p) => p.role === 'owner');
-  const cashiers = st.profiles.filter((p) => p.role === 'cashier');
+  const cashiers = st.profiles.filter((p) => p.role !== 'owner');
   const pending = owners.filter((p) => !p.is_approved && !p.rejected_at);
   const approved = owners.filter((p) => p.is_approved);
   const active = approved.filter((p) => p.active !== false);
@@ -183,12 +281,23 @@ function derive() {
 }
 
 /* ---------- Kuchora ---------- */
-const card = (key, ic, bg, color, label, value, sub = '') => `
-  <div class="stat-card clickable" data-box="${key}" role="button" tabindex="0">
+function countUp(el, from, to, ms) {
+  const t0 = performance.now();
+  const ease = (t) => 1 - Math.pow(1 - t, 3);
+  const tick = (now) => {
+    const t = Math.min(1, (now - t0) / ms);
+    el.textContent = Math.round(from + (to - from) * ease(t));
+    if (t < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+const card = (i, key, ic, bg, color, label, value, sub = '', pulse = false) => `
+  <div class="stat-card clickable${pulse ? ' pulse' : ''}" data-box="${key}" role="button" tabindex="0" style="--i:${i}">
     <div class="stat-icon" style="background:${bg};color:${color};">${iconx(ic)}</div>
     <div class="stat-content">
       <p class="stat-label">${label}</p>
-      <h3 class="stat-value">${value}</h3>
+      <h3 class="stat-value">${typeof value === 'number' ? `<span data-count="${key}" data-to="${value}">${value}</span>` : value}</h3>
       ${sub ? `<span class="stat-change"><span>${sub}</span></span>` : ''}
     </div>
   </div>`;
@@ -256,32 +365,56 @@ function approvedTable(list) {
   );
 }
 
+function staggerRows() {
+  ROOT.querySelectorAll('#dev-sections tbody tr').forEach((tr, i) => tr.style.setProperty('--r', Math.min(i, 14)));
+}
+
 function paint() {
   const D = derive();
+  const enter = firstPaint;
+  firstPaint = false;
 
-  $('#dev-stats').innerHTML = [
-    card('all_owners', 'store', '#dbeafe', '#1e40af', 'Jumla ya Owners', D.owners.length),
-    card('pending', 'user-plus', '#fef3c7', '#92400e', 'Wanasubiri Uthibitisho', D.pending.length, D.pending.length ? 'Zinahitaji hatua yako' : 'Hakuna ombi jipya'),
-    card('active', 'shield-check', '#dcfce7', '#166534', 'Wamepitishwa (Active)', D.active.length),
-    card('closed', 'ban', '#fee2e2', '#991b1b', 'Wamefungwa / Wamekataliwa', D.closed.length),
-    card('cashiers', 'users', '#fce7f3', '#9d174d', 'Jumla ya Cashiers', D.cashiers.length),
-    card('new_week', 'activity', '#ede9fe', '#5b21b6', 'Maombi ya Wiki Hii', D.newWeek.length),
-    card('expiring', 'calendar', '#ffedd5', '#9a3412', 'Mipango Inayoisha (siku 14)', D.expiring.length),
-    card('inactive', 'clock', '#e5e7eb', '#374151', 'Hawajauza (siku 14)', st.statsOk ? D.inactive.length : '-', st.statsOk ? '' : 'Endesha SQL ya Hatua 1')
+  const stats = $('#dev-stats');
+  const sections = $('#dev-sections');
+  stats.classList.toggle('enter', enter);
+  sections.classList.toggle('enter', enter);
+
+  stats.innerHTML = [
+    card(0, 'all_owners', 'store', '#dbeafe', '#1e40af', 'Jumla ya Owners', D.owners.length),
+    card(1, 'pending', 'user-plus', '#fef3c7', '#92400e', 'Wanasubiri Uthibitisho', D.pending.length, D.pending.length ? 'Zinahitaji hatua yako' : 'Hakuna ombi jipya', D.pending.length > 0),
+    card(2, 'active', 'shield-check', '#dcfce7', '#166534', 'Wamepitishwa (Active)', D.active.length),
+    card(3, 'closed', 'ban', '#fee2e2', '#991b1b', 'Wamefungwa / Wamekataliwa', D.closed.length),
+    card(4, 'cashiers', 'users', '#fce7f3', '#9d174d', 'Jumla ya Wafanyakazi', D.cashiers.length),
+    card(5, 'new_week', 'activity', '#ede9fe', '#5b21b6', 'Maombi ya Wiki Hii', D.newWeek.length),
+    card(6, 'expiring', 'calendar', '#ffedd5', '#9a3412', 'Mipango Inayoisha (siku 14)', D.expiring.length),
+    card(7, 'inactive', 'clock', '#e5e7eb', '#374151', 'Hawajauza (siku 14)', st.statsOk ? D.inactive.length : '-', st.statsOk ? '' : 'Endesha SQL ya Hatua 1')
   ].join('');
 
-  $('#dev-sections').innerHTML = `
+  // Namba zinahesabu kutoka thamani ya awali hadi mpya
+  stats.querySelectorAll('[data-count]').forEach((el) => {
+    const key = el.dataset.count;
+    const to = Number(el.dataset.to);
+    const from = st.prev[key] ?? 0;
+    st.prev[key] = to;
+    if (from !== to) {
+      el.textContent = from;
+      countUp(el, from, to, enter ? 1300 : 700);
+    }
+  });
+
+  sections.innerHTML = `
     <div class="ui-section"><h2>Maombi Mapya (Zinasubiri Uthibitisho)</h2><span class="muted">${D.pending.length}</span></div>
     ${pendingTable(D.pending)}
 
     <div class="ui-section">
       <h2>Owners Waliopitishwa</h2>
-      <input type="text" id="dev-search" placeholder="Tafuta jina, email, simu au duka..." value="${esc(st.q)}" style="max-width: 320px; width: 100%;" />
+      <input type="search" id="dev-search" class="dev-search" placeholder="Tafuta jina, email, simu au duka..." value="${esc(st.q)}" autocomplete="off" />
     </div>
     <div id="dev-approved">${approvedTable(D.approved)}</div>
 
     ${D.closed.length ? `<div class="ui-section"><h2>Waliofungwa / Waliokataliwa</h2><span class="muted">${D.closed.length}</span></div>${usersTable(D.closed)}` : ''}
   `;
+  staggerRows();
 
   const search = $('#dev-search');
   if (search) {
@@ -305,7 +438,7 @@ function openBox(key) {
     pending: ['Wanasubiri Uthibitisho', D.pending],
     active: ['Wamepitishwa (Active)', D.active],
     closed: ['Wamefungwa / Wamekataliwa', D.closed],
-    cashiers: ['Cashiers Wote', D.cashiers],
+    cashiers: ['Wafanyakazi Wote', D.cashiers],
     new_week: ['Maombi ya Wiki Hii', D.newWeek],
     expiring: ['Mipango Inayoisha (siku 14)', D.expiring],
     inactive: ['Hawajauza kwa Siku 14', D.inactive]
@@ -587,10 +720,13 @@ export async function renderDeveloper(root, user, profile) {
   }
 
   ensureSharedStyles();
+  ensureDevStyles();
   ROOT = root;
   USER = user;
   MODAL = createDetailModal();
   st.q = '';
+  st.prev = {};
+  firstPaint = true;
 
   root.innerHTML = `
     <div class="developer-container">
@@ -605,7 +741,7 @@ export async function renderDeveloper(root, user, profile) {
         </div>
       </div>
       <div id="dev-errors"></div>
-      <div id="dev-stats" class="stats-grid"></div>
+      <div id="dev-stats" class="stats-grid">${'<div class="dev-skel"></div>'.repeat(8)}</div>
       <div id="dev-sections"></div>
     </div>`;
 
@@ -615,7 +751,14 @@ export async function renderDeveloper(root, user, profile) {
     if (box) return openBox(box.dataset.box);
     const btn = e.target.closest('button');
     if (!btn) return;
-    if (btn.id === 'dev-refresh') return refresh().catch((err) => alert(err.message));
+    if (btn.id === 'dev-refresh') {
+      firstPaint = true; // rudia animation nzima
+      st.prev = {};
+      btn.classList.add('spin');
+      return refresh()
+        .catch((err) => alert(err.message))
+        .finally(() => btn.classList.remove('spin'));
+    }
     if (btn.id === 'dev-export') return exportOwners();
     if (btn.dataset.action) handleAction(btn);
   });
@@ -658,6 +801,7 @@ export async function renderDeveloper(root, user, profile) {
     paint();
   } catch (error) {
     console.error('Developer error:', error);
+    $('#dev-stats').innerHTML = '';
     $('#dev-errors').innerHTML = `<div class="ui-note">Hitilafu: ${esc(error.message)}</div>`;
   }
 

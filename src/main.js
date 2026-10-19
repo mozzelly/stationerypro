@@ -298,3 +298,26 @@ start().catch(error => {
     </main>`;
   root.querySelector("#retry-app").addEventListener("click", () => location.reload());
 });
+// =================================================================
+// ERROR LOGGING SYSTEM (Kutuma makosa kwenye database)
+// =================================================================
+window.logError = async (error, pageName) => {
+  try {
+    // Pata user aliye-login (kama yupo)
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    // Tuma error kwenye database
+    await supabase.from('error_logs').insert({
+      error_message: error.message || String(error),
+      page_name: pageName,
+      user_id: user?.id || null,
+      created_at: new Date().toISOString()
+    });
+    
+    // Pia iandike kwenye console ya browser (kwa ajili ya wewe developer)
+    console.error(`[Error Logged]: ${pageName} - ${error.message}`);
+  } catch (logErr) {
+    // Kama hata logging imeshindwa, usisumbue user
+    console.error("Imeshindikana kuhifadhi error:", logErr);
+  }
+};
