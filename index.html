@@ -6,11 +6,11 @@
   <meta name="theme-color" content="#1456c0">
   <meta name="description" content="StationeryPro — Mfumo wa kusimamia stationery, bidhaa, stock na mauzo. Powered by Mozz Elly.">
 
-  <!-- Favicon inline (hakuna file ya nje inayohitajika) -->
+  <!-- Favicon inline -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231456c0'/><text x='50' y='65' font-size='50' font-weight='bold' fill='white' text-anchor='middle'>SP</text></svg>" />
 
-  <!-- Manifest inline (hakuna file ya nje inayohitajika) -->
-  <link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjoiU3RhdGlvbmVyeVBybyIsInNob3J0X25hbWUiOiJTUCIsInN0YXJ0X3VybCI6Ii4iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjZmZmZmZmIiwidGhlbWVfY29sb3IiOiIjMTQ1NmMwIn0=">
+  <!-- ✅ MAREKEBISHO: Manifest inasoma kutoka public folder -->
+  <link rel="manifest" href="/manifest.json">
 
   <title>StationeryPro — Powered by Mozz Elly</title>
 
@@ -175,6 +175,21 @@
     window.addEventListener("unhandledrejection", function (event) {
       console.error("[StationeryPro] Promise error:", event.reason);
     });
+  </script>
+
+  <!-- ✅ MAREKEBISHO: Service Worker Registration kwa Offline Support -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(registration => {
+            console.log('Service Worker registered successfully:', registration.scope);
+          })
+          .catch(error => {
+            console.log('Service Worker registration failed:', error);
+          });
+      });
+    }
   </script>
 
   <!-- Vite itaibadilisha hii kuwa /stationerypro/assets/index-xxxx.js wakati wa build -->
